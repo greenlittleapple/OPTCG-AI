@@ -1,0 +1,3 @@
+# requirements.txt
+pyautogui>=0.9,<1.0
+pillow>=10.0,<11.0      # Pillow is an indirect dependency used by pyautogui
