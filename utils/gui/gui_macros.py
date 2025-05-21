@@ -2,19 +2,20 @@
 High-level GUI macros for OPTCGSim automation.
 ============================================
 
-This module turns symbolic game instructions ("P1 card 2 uses Action 3 on
-P2 card 4") into the concrete click sequences required by the GUI helpers
-in `utils.gui.gui_automation_starter`.
+This module converts symbolic instructions ("P1 card 2 uses Action 3 on
+P2 card 4") into concrete click sequences using helpers from
+`utils.gui.gui_automation_starter`.
 
 Public API
 ----------
 * perform_action() – generic helper covering no‑target, single‑target, and
   multi‑target card actions.
-* attack()         – thin convenience wrapper for the common "Action 1 =
-  Attack" pattern that now lets you specify any acting *and* target card.
+* attack()         – convenience wrapper for the common "Action 1 = Attack"
+  pattern that lets you specify any acting *and* target card.
+* attach_don()     – attach one or more DON!! cards to a specified card on
+  the active player's board.
 
---------------------------------------------------------------------------
-ASCII‑only; no smart quotes.
+All text is ASCII‑only; no smart quotes.
 """
 from __future__ import annotations
 
@@ -43,8 +44,8 @@ def perform_action(
     action_number : int
         0, 1, 2, or 3 → mapped to Action‑button helpers.
     targets : list[tuple[int, int]] | None
-        Each tuple is (player, card_index). Provide an empty list or None
-        for no‑target actions.
+        Each tuple is (player, card_index). Provide None (or empty list) for
+        no‑target actions.
     """
     # --- Validate ----------------------------------------------------
     if acting_player not in (1, 2):
@@ -81,12 +82,10 @@ def attack(
     target_player: int,
     target_card_index: int,
 ) -> None:
-    """Common attack macro (Action 1).
+    """Attack macro (Action 1).
 
-    Lets you specify any card as the attacker and any card as the target.
-
-    Example
-    -------
+    Examples
+    --------
     >>> attack(1, 0, 2, 0)  # P1 leader attacks P2 leader
     >>> attack(2, 3, 1, 2)  # P2 slot‑3 card attacks P1 slot‑2 card
     """
@@ -96,6 +95,58 @@ def attack(
         action_number=1,
         targets=[(target_player, target_card_index)],
     )
+
+
+def attach_don(
+    acting_player: int,
+    card_index: int,
+    attachable_don: int,
+    total_don: int,
+    num_to_attach: int,
+) -> None:
+    """Attach DON!! cards to a card on the active player's board.
+
+    Parameters
+    ----------
+    acting_player : int
+        1 or 2 (whose turn it is). Only that player can attach DON.
+    card_index : int
+        0 = leader, 1–5 = board slots.
+    attachable_don : int
+        Number of DON currently in the "attachable" state (always the last
+        cards in the DON row).
+    total_don : int
+        Total DON the player controls (0–10).
+    num_to_attach : int
+        How many DON to attach to the chosen card.
+    """
+    # --- Validate ----------------------------------------------------
+    if acting_player not in (1, 2):
+        raise ValueError("acting_player must be 1 or 2")
+    if not 0 <= card_index <= 5:
+        raise ValueError("card_index must be 0–5")
+    if not 0 <= attachable_don <= total_don <= 10:
+        raise ValueError("attachable_don ≤ total_don ≤ 10 must hold")
+    if not 1 <= num_to_attach <= attachable_don:
+        raise ValueError("num_to_attach must be 1..attachable_don")
+
+    # --- Determine which DON helper to use --------------------------
+    click_don = GUI.click_p1_don if acting_player == 1 else GUI.click_p2_don
+
+    # --- Compute DON indices to click -------------------------------
+    start_idx = total_don - attachable_don  # first attachable DON index
+    first_to_click = total_don - num_to_attach
+    don_indices = range(first_to_click, total_don)  # inclusive‑exclusive
+
+    # --- Click chosen DON ------------------------------------------
+    for d_idx in don_indices:
+        click_don(d_idx)
+
+    # --- Click card to receive DON ---------------------------------
+    _click_board_card(acting_player, card_index)
+
+    # --- Confirm attachment (Action 1) ------------------------------
+    GUI.click_action1()
 
 # ---------------------------------------------------------------------
 # Internal util --------------------------------------------------------

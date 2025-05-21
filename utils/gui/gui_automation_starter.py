@@ -11,14 +11,20 @@ Helpers included so far:
     • Leaders: P1, P2
     • Board cards: P1 & P2 board slots with updated spacing
     • Hand cards: P1 and P2 variable‑width hand slots
+    • DON counters: generic selector for the 10 DON cards
 
 *Board‑card spacing update*
 ---------------------------
-P1 board slots are now spaced **6 %** apart (was 5 %).
+P1 board slots are spaced **6 %** apart (was 5 %).
 First slot still starts at x = 40 %.
 
 P2 board slots mirror this, but the entire row shifts **10 % leftward**
 so the right‑most slot now starts at x = 60 %.
+
+*DON selector*
+--------------
+DON counters are arranged horizontally from x = 40 % to 60 % at y = 90 %.
+Index 0 is the left‑most DON; index 9 is the right‑most.
 
 Dependencies:
     pyautogui
@@ -143,7 +149,7 @@ _P2_BOARD_Y       = 0.45
 def click_p1_card(slot: int) -> None:
     """Click Player 1's board card in the specified slot (0‑4, left→right).
 
-    Spacing between slots is now 6 % of window width.
+    Spacing between slots is 6 % of window width.
     """
     if not 0 <= slot <= 4:
         raise ValueError("slot must be between 0 and 4 inclusive")
@@ -161,7 +167,7 @@ def click_p2_card(slot: int) -> None:
     rel_x = _P2_BOARD_START_X - _P2_BOARD_STEP_X * slot
     click_relative_to_window(rel_x, _P2_BOARD_Y)
 
-# Hand card helpers remain unchanged
+# Hand card helpers
 
 def _hand_rel_x(card_index: int, hand_size: int) -> float:
     """Return the relative x position for a hand card.
@@ -193,18 +199,38 @@ def click_p2_hand(card_index: int, hand_size: int) -> None:
     click_relative_to_window(rel_x, 0.10)
 
 # ---------------------------------------------------------------------------
-# Demo
-# ---------------------------------------------------------------------------
+# DON card helpers  ----------------------------------------------------------
+# P1 row (unchanged)
 
-if __name__ == "__main__":
-    print("Demo will click updated board card hotspots in five seconds…")
-    time.sleep(5)
-    for i in range(5):
-        click_p1_card(i)
-    click_action0()
-    click_end_turn()
-    for i in range(5):
-        click_p2_card(i)
-    click_action0()
-    click_end_turn()
-    print("Done.")
+_P1_DON_START_X = 0.40
+_P1_DON_END_X   = 0.55
+_P1_DON_Y       = 0.90
+_P1_DON_STEP_X  = (_P1_DON_END_X - _P1_DON_START_X) / 10
+
+
+def click_don(don_index: int) -> None:
+    """Backward-compat alias: same as click_p1_don()."""
+    click_p1_don(don_index)
+
+
+def click_p1_don(don_index: int) -> None:
+    """Click one of Player 1's 10 DON counters (index 0 = left-most)."""
+    if not 0 <= don_index <= 9:
+        raise ValueError("don_index must be between 0 and 9 inclusive")
+    rel_x = _P1_DON_START_X + _P1_DON_STEP_X * don_index
+    click_relative_to_window(rel_x, _P1_DON_Y)
+
+# --- NEW: P2 row -----------------------------------------------------------
+
+_P2_DON_START_X = 0.60          # right-most DON (index 0)
+_P2_DON_END_X   = 0.45          # left-most DON  (index 9)
+_P2_DON_Y       = 0.10
+_P2_DON_STEP_X  = (_P2_DON_END_X - _P2_DON_START_X) / 10  # negative step
+
+
+def click_p2_don(don_index: int) -> None:
+    """Click one of Player 2's 10 DON counters (index 0 = right-most)."""
+    if not 0 <= don_index <= 9:
+        raise ValueError("don_index must be between 0 and 9 inclusive")
+    rel_x = _P2_DON_START_X + _P2_DON_STEP_X * don_index
+    click_relative_to_window(rel_x, _P2_DON_Y)
