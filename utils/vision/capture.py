@@ -1,4 +1,4 @@
-# utils/vision.py
+# utils/capture.py
 """OPTCG‑Sim computer‑vision helpers
 ====================================
 Capture frames directly from the **OPTCGSim.exe** window—even when other
@@ -30,7 +30,9 @@ import win32con  # type: ignore
 import win32gui  # type: ignore
 import win32process  # type: ignore
 import win32ui  # type: ignore
+import pytesseract
 
+pytesseract.pytesseract.tesseract_cmd = r"C:/Programs/Tesseract-OCR/tesseract.exe"
 # ---------------------------------------------------------------------------
 # Internal helpers – Win32 plumbing
 # ---------------------------------------------------------------------------
@@ -64,6 +66,7 @@ def _get_pid_by_name(exe_name: str) -> Optional[int]:
 # Capture back‑end
 # ---------------------------------------------------------------------------
 
+
 class CaptureBackend(enum.Enum):
     """Which Windows API to grab pixels with."""
 
@@ -78,6 +81,7 @@ class CaptureError(RuntimeError):
 # ---------------------------------------------------------------------------
 # Main public class
 # ---------------------------------------------------------------------------
+
 
 class OPTCGVision:
     """High‑level helper to capture frames & run template matching.
@@ -135,9 +139,9 @@ class OPTCGVision:
         scene: np.ndarray,
         template: np.ndarray,
         *,
-        threshold: float = 0.5,
-        scales: Sequence[float] | float = (0.205, 0.2, 1.0),
-        max_results: int = 10,
+        threshold: float = 0.95,
+        scales: Sequence[float] | float = (1.0),
+        max_results: int = 1,
         method: int = cv2.TM_CCOEFF_NORMED,
     ) -> List[Tuple[Tuple[int, int], Tuple[int, int], float]]:
         """Return up to *max_results* matches sorted by best score.
@@ -154,9 +158,11 @@ class OPTCGVision:
             tpl = cv2.resize(template, (0, 0), fx=s, fy=s) if s != 1.0 else template
             res = cv2.matchTemplate(scene, tpl, method)
             (ys, xs) = np.where(res >= threshold)
-            for (x, y) in zip(xs, ys):
+            for x, y in zip(xs, ys):
                 score = res[y, x]
-                matches.append(((int(x), int(y)), (int(w0 * s), int(h0 * s)), float(score)))
+                matches.append(
+                    ((int(x), int(y)), (int(w0 * s), int(h0 * s)), float(score))
+                )
         # Sort & NMS
         matches.sort(key=lambda m: m[2], reverse=True)
         kept: List[Tuple[Tuple[int, int], Tuple[int, int], float]] = []
@@ -174,6 +180,68 @@ class OPTCGVision:
             if ok:
                 kept.append(cand)
         return kept
+
+    @staticmethod
+    def detect_number(
+        frame: np.ndarray,
+        *,
+        visualize: bool = False,
+    ) -> str | None:
+        def _show_steps(steps: list[tuple[str, np.ndarray]]) -> None:
+            """Helper: pop up each debug image in its own window."""
+            for title, img in steps:
+                cv2.imshow(title, img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        """
+        Extract the pink power number from an OPTCG screenshot and optionally
+        display each processing step.
+
+        Parameters
+        ----------
+        frame : np.ndarray   BGR image captured from the game window
+        visualize : bool     Pop up debug windows if True
+
+        Returns
+        -------
+        str | None           Digits read (e.g. '11000') or None if no label found
+        """
+        debug_imgs: list[tuple[str, np.ndarray]] = [("0 – original", frame.copy())]
+
+        # --- 1. HSV mask ------------------------------------------------------
+        # TODO: Add separate check for green card buff numbers
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        lower = np.array([147, 150, 150], dtype=np.uint8)  # H-S-V lower
+        upper = np.array([163, 255, 255], dtype=np.uint8)  # H-S-V upper
+        mask = cv2.inRange(hsv, lower, upper)
+        debug_imgs.append(("1 – raw HSV mask", cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)))
+
+        # --- 2. Morphology ----------------------------------------------------
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        mask_clean = mask
+        # mask_clean = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k, iterations=2)
+        # mask_clean = cv2.dilate(mask_clean, k, iterations=2)
+        debug_imgs.append(
+            ("2 – cleaned mask", cv2.cvtColor(mask_clean, cv2.COLOR_GRAY2BGR))
+        )
+
+        # --- 5. OCR -----------------------------------------------------------
+        config = "--psm 6 --oem 1 -c tessedit_char_whitelist=GlOIS0123456789"
+        text: str = pytesseract.image_to_string(mask_clean, config=config).strip()
+
+        # -- 6. Replace letters with numbers
+        text = text.replace("O", "0")
+        text = text.replace("S", "5")
+        text = text.replace("G", "6")
+        text = text.replace("I", "1")
+        text = text.replace("l", "1")
+
+        # ---------------------------------------------------------------------
+        if visualize:
+            _show_steps(debug_imgs)
+
+        return text if text else None
 
     # ------------------------------------------------------------------
     # Window search helpers
@@ -212,14 +280,18 @@ class OPTCGVision:
         save_dc.SelectObject(bmp)
 
         # Ask Windows to render the window into our DC
-        result = ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), _PW_RENDERFULLCONTENT)
+        result = ctypes.windll.user32.PrintWindow(
+            hwnd, save_dc.GetSafeHdc(), _PW_RENDERFULLCONTENT
+        )
         if not result:
             raise CaptureError("PrintWindow failed – window may be minimised")
 
         # Convert raw bits → numpy arr
         bmpinfo = bmp.GetInfo()
         raw = bmp.GetBitmapBits(True)
-        img = np.frombuffer(raw, dtype=np.uint8).reshape((bmpinfo["bmHeight"], bmpinfo["bmWidth"], 4))
+        img = np.frombuffer(raw, dtype=np.uint8).reshape(
+            (bmpinfo["bmHeight"], bmpinfo["bmWidth"], 4)
+        )
         img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
         # Release DCs to avoid handle leaks
@@ -236,7 +308,12 @@ class OPTCGVision:
             raise CaptureError("Cannot set up monitor grabbing without a hwnd")
         self._sct = mss.mss()
         left, top, right, bottom = win32gui.GetWindowRect(self._hwnd)
-        self._roi = {"left": left, "top": top, "width": right - left, "height": bottom - top}
+        self._roi = {
+            "left": left,
+            "top": top,
+            "width": right - left,
+            "height": bottom - top,
+        }
 
     def _grab_mss_cropped(self) -> np.ndarray:
         if self._sct is None:
@@ -245,7 +322,12 @@ class OPTCGVision:
         monitor = self._sct.monitors[0]  # full virtual screen
         shot = np.array(self._sct.grab(monitor))[:, :, :3]  # BGRA→BGR strip alpha
         # Crop once per call – negligible cost
-        x, y, w, h = self._roi["left"], self._roi["top"], self._roi["width"], self._roi["height"]
+        x, y, w, h = (
+            self._roi["left"],
+            self._roi["top"],
+            self._roi["width"],
+            self._roi["height"],
+        )
         return shot[y : y + h, x : x + w]
 
 
@@ -275,19 +357,16 @@ def _iou(box_a: Tuple[int, int, int, int], box_b: Tuple[int, int, int, int]) -> 
 
 if __name__ == "__main__":
     v = OPTCGVision()  # defaults assume the sim is already running
-    tpl = cv2.imread(str(Path(__file__).parent / "templates" / "cards" / "OP05" / "OP05-045.png"))
+    tpl = cv2.imread(
+        str(Path(__file__).parent / "templates" / "cards" / "OP05" / "OP05-045.png")
+    )
     assert tpl is not None, "Template not found for demo!"
 
     print("Press Ctrl‑C to exit…")
     try:
         while True:
             frame = v.grab()
-            hits = OPTCGVision.match_template(frame, tpl)
-            for (x, y), (w, h), score in hits:
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(frame, f"{score:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-            cv2.imshow("OPTCGSim vision test", frame)
-            if cv2.waitKey(1) & 0xFF == 27:  # ESC
-                break
+            hits = OPTCGVision.detect_number(frame, visualize=True)
+            print(hits)
     finally:
         cv2.destroyAllWindows()

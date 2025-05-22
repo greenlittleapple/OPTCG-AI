@@ -17,17 +17,18 @@ from typing import List, Tuple
 import cv2
 import numpy as np
 
-from utils.vision.capture import OPTCGVision
+from capture import OPTCGVision
 
 # ---------------------------------------------------------------------------
 # File-system layout (adjust if your repo moves)
 # ---------------------------------------------------------------------------
 
-BASE_DIR  = Path(__file__).resolve().parent.parent / "vision" / "templates"
-CARDS_DIR = BASE_DIR / "cards"         # OPxx-###.png / .jpg live here
+BASE_DIR = Path(__file__).resolve().parent.parent / "vision" / "templates"
+BUTTONS_DIR = BASE_DIR / "buttons"  # OPxx-###.png / .jpg live here
+CARDS_DIR = BASE_DIR / "cards"  # OPxx-###.png / .jpg live here
+LABELS_DIR = BASE_DIR / "labels"  # OPxx-###.png / .jpg live here
 
-STATIC_PATHS = {
-    "end_turn": BASE_DIR / "buttons" / "end_turn_idle.png",
+CARDS = {
     "OP10-001": CARDS_DIR / "OP10" / "OP10-001.jpg",
     "OP10-004": CARDS_DIR / "OP10" / "OP10-004.jpg",
     "OP10-005": CARDS_DIR / "OP10" / "OP10-005.jpg",
@@ -45,9 +46,22 @@ STATIC_PATHS = {
     "ST21-017": CARDS_DIR / "ST21" / "ST21-017.jpg",
 }
 
+BUTTONS = {
+    "attack": BUTTONS_DIR / "attack.png",
+    "end_turn": BUTTONS_DIR / "end_turn.png",
+    "end_turn_2": BUTTONS_DIR / "end_turn_2.png",
+    "resolve_attack": BUTTONS_DIR / "resolve_attack.png",
+}
+
+STATIC_PATHS = {
+    **CARDS,
+    **BUTTONS,
+}
+
 # ---------------------------------------------------------------------------
 # LRU-cached disk loader for card images
 # ---------------------------------------------------------------------------
+
 
 @lru_cache(maxsize=256)
 def _load_card_from_disk(code: str) -> np.ndarray:
@@ -64,11 +78,13 @@ def _load_card_from_disk(code: str) -> np.ndarray:
                 return img
     raise FileNotFoundError(f"Card template for {code!r} not found.")
 
+
 # ---------------------------------------------------------------------------
 # Main class
 # ---------------------------------------------------------------------------
 
 Match = Tuple[Tuple[int, int], Tuple[int, int], float]  # (top-left), (w,h), score
+
 
 class TemplateLoader:
     """
@@ -98,7 +114,7 @@ class TemplateLoader:
     # ------------------------------------------------------------------ #
 
     @property
-    def vision(self) -> OPTCGVision:          # expose capture helper
+    def vision(self) -> OPTCGVision:  # expose capture helper
         return self._vision
 
     def resolve(self, key: str) -> np.ndarray:
@@ -128,3 +144,27 @@ class TemplateLoader:
                 return []
         hits = OPTCGVision.match_template(frame, template)
         return hits
+
+
+if __name__ == "__main__":
+    loader = TemplateLoader()
+    try:
+        while True:
+            frame = loader.vision.grab()
+            hits = loader.find("end_turn", frame=frame)
+            for (x, y), (w, h), score in hits:
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.putText(
+                    frame,
+                    f"{score:.2f}",
+                    (x, y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    1,
+                )
+            cv2.imshow("OPTCGSim vision test", frame)
+            if cv2.waitKey(1) & 0xFF == 27:  # ESC
+                break
+    finally:
+        cv2.destroyAllWindows()
