@@ -83,7 +83,7 @@ class CaptureError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 
-class OPTCGVision:
+class OPTCGVisionHelper:
     """High‑level helper to capture frames & run template matching.
 
     Parameters
@@ -141,7 +141,7 @@ class OPTCGVision:
         *,
         threshold: float = 0.95,
         scales: Sequence[float] | float = (1.0),
-        max_results: int = 1,
+        max_results: int = 10,
         method: int = cv2.TM_CCOEFF_NORMED,
     ) -> List[Tuple[Tuple[int, int], Tuple[int, int], float]]:
         """Return up to *max_results* matches sorted by best score.
@@ -356,7 +356,7 @@ def _iou(box_a: Tuple[int, int, int, int], box_b: Tuple[int, int, int, int]) -> 
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    v = OPTCGVision()  # defaults assume the sim is already running
+    v = OPTCGVisionHelper()  # defaults assume the sim is already running
     tpl = cv2.imread(
         str(Path(__file__).parent / "templates" / "cards" / "OP05" / "OP05-045.png")
     )
@@ -366,7 +366,7 @@ if __name__ == "__main__":
     try:
         while True:
             frame = v.grab()
-            hits = OPTCGVision.detect_number(frame, visualize=True)
+            hits = OPTCGVisionHelper.detect_number(frame, visualize=True)
             print(hits)
     finally:
         cv2.destroyAllWindows()
