@@ -42,6 +42,20 @@ from typing import Tuple
 import pyautogui as pag
 import pygetwindow as gw  # type: ignore
 
+if sys.platform.startswith("win"):
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+
+    WM_MOUSEMOVE = 0x0200
+    WM_LBUTTONDOWN = 0x0201
+    WM_LBUTTONUP = 0x0202
+    MK_LBUTTON = 0x0001
+
+    class POINT(ctypes.Structure):
+        _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -66,6 +80,21 @@ def _get_optcg_window() -> gw.Window:
     return win
 
 
+def _click_without_cursor_move(win: gw.Window, x: int, y: int) -> None:
+    """Send a left-click to (x, y) without moving the system cursor on Windows."""
+    if not sys.platform.startswith("win"):
+        pag.click(x, y)
+        return
+
+    hwnd = int(win._hWnd)
+    pt = POINT(x, y)
+    # Convert from screen to client coordinates so that messages are relative
+    user32.ScreenToClient(hwnd, ctypes.byref(pt))
+    lparam = (pt.y << 16) | (pt.x & 0xFFFF)
+    user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
+    user32.PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lparam)
+    user32.PostMessageW(hwnd, WM_LBUTTONUP, 0, lparam)
+
 def click_relative_to_window(rel_x: float, rel_y: float, delay: float = CLICK_DELAY) -> None:
     """Click at a position expressed as a fraction of the window size.
 
@@ -80,7 +109,12 @@ def click_relative_to_window(rel_x: float, rel_y: float, delay: float = CLICK_DE
     win = _get_optcg_window()
     x = int(win.left + rel_x * win.width)
     y = int(win.top + rel_y * win.height)
-    pag.click(x, y)
+
+    if sys.platform.startswith("win"):
+        _click_without_cursor_move(win, x, y)
+    else:
+        pag.click(x, y)
+
     time.sleep(delay)
 
 # ---------------------------------------------------------------------------
