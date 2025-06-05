@@ -27,7 +27,8 @@ DON counters are arranged horizontally from x = 40 % to 60 % at y = 90�
 Index 0 is the left‑most DON; index 9 is the right‑most.
 
 Dependencies:
-    pyautogui
+    pywin32    (preferred for cursorless clicks on Windows)
+    pyautogui  (fallback when pywin32 is unavailable)
     pygetwindow
 
 Adjust the WINDOW_TITLE constant if the client window has a different title.
@@ -41,6 +42,12 @@ from typing import Tuple
 
 import pyautogui as pag
 import pygetwindow as gw  # type: ignore
+try:
+    import win32api
+    import win32con
+    import win32gui
+except Exception:  # pragma: no cover - platform-specific optional deps
+    win32api = win32con = win32gui = None
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -66,6 +73,23 @@ def _get_optcg_window() -> gw.Window:
     return win
 
 
+def _send_click(win: gw.Window, x: int, y: int) -> None:
+    """Send a left-click to *win* at absolute screen position ``(x, y)``.
+
+    Uses :mod:`pywin32` if available to avoid moving the real cursor. On
+    non-Windows platforms (or if pywin32 is not installed) this falls back to
+    :func:`pyautogui.click`.
+    """
+    if win32gui is None:
+        pag.click(x, y)
+        return
+
+    client_x, client_y = win32gui.ScreenToClient(win._hWnd, (x, y))
+    lparam = win32api.MAKELONG(client_x, client_y)
+    win32gui.PostMessage(win._hWnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
+    win32gui.PostMessage(win._hWnd, win32con.WM_LBUTTONUP, 0, lparam)
+
+
 def click_relative_to_window(rel_x: float, rel_y: float, delay: float = CLICK_DELAY) -> None:
     """Click at a position expressed as a fraction of the window size.
 
@@ -80,7 +104,7 @@ def click_relative_to_window(rel_x: float, rel_y: float, delay: float = CLICK_DE
     win = _get_optcg_window()
     x = int(win.left + rel_x * win.width)
     y = int(win.top + rel_y * win.height)
-    pag.click(x, y)
+    _send_click(win, x, y)
     time.sleep(delay)
 
 # ---------------------------------------------------------------------------
