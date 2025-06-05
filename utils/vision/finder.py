@@ -28,23 +28,7 @@ BUTTONS_DIR = BASE_DIR / "buttons"  # OPxx-###.png / .jpg live here
 CARDS_DIR = BASE_DIR / "cards"  # OPxx-###.png / .jpg live here
 LABELS_DIR = BASE_DIR / "labels"  # OPxx-###.png / .jpg live here
 
-CARDS = {
-    "OP10-001": CARDS_DIR / "OP10" / "OP10-001.jpg",
-    "OP10-004": CARDS_DIR / "OP10" / "OP10-004.jpg",
-    "OP10-005": CARDS_DIR / "OP10" / "OP10-005.jpg",
-    "OP10-011": CARDS_DIR / "OP10" / "OP10-011.jpg",
-    "OP10-016": CARDS_DIR / "OP10" / "OP10-016.jpg",
-    "ST21-014": CARDS_DIR / "ST21" / "ST21-014.jpg",
-    "OP11-004": CARDS_DIR / "OP11" / "OP11-004.jpg",
-    "OP11-017": CARDS_DIR / "OP11" / "OP11-017.jpg",
-    "OP01-051": CARDS_DIR / "OP01" / "OP01-051.png",
-    "OP05-030": CARDS_DIR / "OP05" / "OP05-030.png",
-    "OP06-035": CARDS_DIR / "OP06" / "OP06-035.png",
-    "OP10-030": CARDS_DIR / "OP10" / "OP10-030.jpg",
-    "OP10-032": CARDS_DIR / "OP10" / "OP10-032.jpg",
-    "OP10-018": CARDS_DIR / "OP10" / "OP10-018.jpg",
-    "ST21-017": CARDS_DIR / "ST21" / "ST21-017.jpg",
-}
+CARDS = {} # TODO: Automatically generate cards based on images in directory
 
 BUTTONS = {
     "attack": BUTTONS_DIR / "attack.png",
@@ -170,8 +154,12 @@ class OPTCGVision:
             include_initial_hands: If True, scan all five hand slots for each
             player and return `initial_hand_p1/p2`.  If False, skip that work.
 
+        The function also scans each board slot for both players using preset
+        coordinates.
+
         Returns:
             Observation dict.  Initial-hand keys appear only if requested.
+            Board state is always included under ``board_p1`` and ``board_p2``.
         """
         frame = self.grab()
         h, w = frame.shape[:2]
@@ -180,11 +168,14 @@ class OPTCGVision:
         btn_y0, btn_y1 = int(0.50 * h), h
         btn_x0, btn_x1 = int(0.70 * w), w
         cropped_buttons = frame[btn_y0:btn_y1, btn_x0:btn_x1]
-
         buttons = {name: self.find(name, frame=cropped_buttons) for name in BUTTONS}
 
         # 2. Constants -------------------------------------------------------
         SLOT_WIDTH_PCT, SLOT_SHIFT_PCT, SLOTS = 0.10, 0.05, 5
+        BOARD_WIDTH_PCT, BOARD_STEP_PCT = 0.10, 0.06
+        BOARD_P1_START_X, BOARD_P1_Y = 0.40, 0.6
+        BOARD_P2_START_X, BOARD_P2_Y = 0.60, 0.45
+        BOARD_HEIGHT_PCT = 0.20
 
         def scan_hand(y0: int, y1: int, ordered: bool):
             """Either return list of 5 slots (ordered=True) or only newest slot."""
@@ -202,6 +193,22 @@ class OPTCGVision:
                 roi = frame[y0:y1, x0:x1]
                 return self._detect_card_in_roi(roi)
 
+        def scan_board(
+            start_x: float, step_x: float, y_center: float, right_to_left: bool = False
+        ) -> List[str]:
+            y0 = int((y_center - BOARD_HEIGHT_PCT / 2) * h)
+            y1 = int((y_center + BOARD_HEIGHT_PCT / 2) * h)
+            slots: List[str] = []
+            for i in range(SLOTS):
+                center_x = start_x + step_x * i
+                x0 = int((center_x - BOARD_WIDTH_PCT / 2) * w)
+                x1 = int((center_x + BOARD_WIDTH_PCT / 2) * w)
+                roi = frame[y0:y1, x0:x1]
+                # cv2.imshow("board", roi)
+                # cv2.waitKey(0)
+                slots.append(self._detect_card_in_roi(roi))
+            return slots[::-1] if right_to_left else slots
+
         # 3. Player-1 --------------------------------------------------------
         p1_y0, p1_y1 = int(0.80 * h), h
         if include_initial_hands:
@@ -210,6 +217,7 @@ class OPTCGVision:
         else:
             latest_card_p1 = scan_hand(p1_y0, p1_y1, False)
             initial_hand_p1 = None
+        board_p1 = scan_board(BOARD_P1_START_X, BOARD_STEP_PCT, BOARD_P1_Y)
 
         # 4. Player-2 --------------------------------------------------------
         p2_y0, p2_y1 = 0, int(0.20 * h)
@@ -219,6 +227,9 @@ class OPTCGVision:
         else:
             latest_card_p2 = scan_hand(p2_y0, p2_y1, False)
             initial_hand_p2 = None
+        board_p2 = scan_board(
+            BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y, right_to_left=True
+        )
 
         # 5. Pack observations ----------------------------------------------
         obs: Dict[str, Any] = {
@@ -227,6 +238,8 @@ class OPTCGVision:
             "can_end_turn": bool(buttons.get("end_turn")),
             "latest_card_p1": latest_card_p1,
             "latest_card_p2": latest_card_p2,
+            "board_p1": board_p1,
+            "board_p2": board_p2,
         }
         if include_initial_hands:
             obs["initial_hand_p1"] = initial_hand_p1
