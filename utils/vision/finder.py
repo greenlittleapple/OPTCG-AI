@@ -28,7 +28,14 @@ BUTTONS_DIR = BASE_DIR / "buttons"  # OPxx-###.png / .jpg live here
 CARDS_DIR = BASE_DIR / "cards"  # OPxx-###.png / .jpg live here
 LABELS_DIR = BASE_DIR / "labels"  # OPxx-###.png / .jpg live here
 
-CARDS = {} # TODO: Automatically generate cards based on images in directory
+# Automatically map card IDs to their template paths. The files currently use
+# the naming scheme "<card-id>_small.<ext>"; strip the suffix to obtain the
+# card code used throughout the project.
+CARDS = {
+    (p.stem[:-6] if p.stem.endswith("_small") else p.stem): p
+    for p in CARDS_DIR.iterdir()
+    if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg"}
+}
 
 BUTTONS = {
     "attack": BUTTONS_DIR / "attack.png",
@@ -133,8 +140,8 @@ class OPTCGVision:
             frame = self.grab()
             if frame is None:
                 return []
-        threshold = 0.8 if is_card else 0.95
-        scales = (0.205) if is_card else (1.0)
+        threshold = 0.95
+        scales = 99/120 if is_card else (1.0) # scale to (in-game card size / card template size)
         hits = OPTCGVisionHelper.match_template(
             frame, template, threshold=threshold, scales=scales
         )
@@ -253,7 +260,7 @@ def test_find(key: str):
     try:
         while True:
             frame = vision.grab()
-            hits = vision.find(key, frame=frame)
+            hits = vision.find(key, frame=frame, is_card=key in CARDS.keys())
             for (x, y), (w, h), score in hits:
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 cv2.putText(
@@ -273,15 +280,14 @@ def test_find(key: str):
 
 
 if __name__ == "__main__":
-    # test_find("OP10-001")
-    vision = OPTCGVision()
-    try:
-        while True:
-            frame = vision.grab()
-            obs = vision.scan(True)
-            print(obs)
-            cv2.imshow("OPTCGSim vision test", frame)
-            if cv2.waitKey(1) & 0xFF == 27:  # ESC
-                break
-    finally:
-        cv2.destroyAllWindows()
+    test_find("OP08-010")
+    # vision = OPTCGVision()
+    # try:
+    #     while True:
+    #         frame = vision.grab()
+    #         obs = vision.scan(True)
+    #         print(obs)
+    #         cv2.imshow("OPTCGSim vision test", frame)
+    #         cv2.waitKey(0)
+    # finally:
+    #     cv2.destroyAllWindows()
