@@ -89,9 +89,10 @@ def _send_click(win: gw.Window, x: int, y: int) -> None:
 
     client_x, client_y = win32gui.ScreenToClient(win._hWnd, (x, y))
     lparam = win32api.MAKELONG(client_x, client_y)
-    win32gui.SendMessage(win._hWnd, win32con.WM_MOUSEMOVE, 0, lparam)
-    win32gui.SendMessage(win._hWnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
-    win32gui.SendMessage(win._hWnd, win32con.WM_LBUTTONUP, 0, lparam)
+    win32gui.PostMessage(win._hWnd, win32con.WM_MOUSEMOVE, 0, lparam)
+    win32gui.PostMessage(win._hWnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
+    time.sleep(0.01)
+    win32gui.PostMessage(win._hWnd, win32con.WM_LBUTTONUP, 0, lparam)
 
 
 def click_relative_to_window(rel_x: float, rel_y: float, delay: float = CLICK_DELAY) -> None:
