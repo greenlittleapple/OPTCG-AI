@@ -303,14 +303,14 @@ def test_find(key: str):
 
 
 if __name__ == "__main__":
-    test_find("OP08-010")
-    # vision = OPTCGVision()
-    # try:
-    #     while True:
-    #         frame = vision.grab()
-    #         obs = vision.scan(True)
-    #         print(obs)
-    #         cv2.imshow("OPTCGSim vision test", frame)
-    #         cv2.waitKey(0)
-    # finally:
-    #     cv2.destroyAllWindows()
+    # test_find("OP08-010")
+    vision = OPTCGVision()
+    try:
+        while True:
+            frame = vision.grab()
+            obs = vision.scan(True)
+            print(obs)
+            cv2.imshow("OPTCGSim vision test", frame)
+            cv2.waitKey(0)
+    finally:
+        cv2.destroyAllWindows()
