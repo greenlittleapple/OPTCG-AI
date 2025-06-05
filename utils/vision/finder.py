@@ -37,11 +37,12 @@ CARDS = {
     if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg"}
 }
 
+# Automatically map button names to their template paths. Any image file found
+# in ``BUTTONS_DIR`` becomes a key using its stem.
 BUTTONS = {
-    "attack": BUTTONS_DIR / "attack.png",
-    "end_turn": BUTTONS_DIR / "end_turn.png",
-    "end_turn_2": BUTTONS_DIR / "end_turn_2.png",
-    "resolve_attack": BUTTONS_DIR / "resolve_attack.png",
+    p.stem: p
+    for p in BUTTONS_DIR.iterdir()
+    if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg"}
 }
 
 STATIC_PATHS = {
@@ -162,7 +163,8 @@ class OPTCGVision:
             player and return `initial_hand_p1/p2`.  If False, skip that work.
 
         The function also scans each board slot for both players using preset
-        coordinates.
+        coordinates and looks for up to five selectable cards in the centre of
+        the screen (same width as the P1 hand but from 65–85% height).
 
         Returns:
             Observation dict.  Initial-hand keys appear only if requested.
@@ -176,6 +178,8 @@ class OPTCGVision:
         btn_x0, btn_x1 = int(0.70 * w), w
         cropped_buttons = frame[btn_y0:btn_y1, btn_x0:btn_x1]
         buttons = {name: self.find(name, frame=cropped_buttons) for name in BUTTONS}
+        can_choose = bool(buttons.get("choose_0_targets"))
+        can_draw = bool(buttons.get("dont_draw_any"))
 
         # 2. Constants -------------------------------------------------------
         SLOT_WIDTH_PCT, SLOT_SHIFT_PCT, SLOTS = 0.10, 0.05, 5
@@ -216,6 +220,16 @@ class OPTCGVision:
                 slots.append(self._detect_card_in_roi(roi))
             return slots[::-1] if right_to_left else slots
 
+        def scan_choices(y0: int, y1: int) -> List[str]:
+            """Scan up to 5 selectable cards arranged like the P1 hand."""
+            cards: List[str] = []
+            for i in range(SLOTS):
+                x0 = int(SLOT_SHIFT_PCT * i * w)
+                x1 = int(x0 + SLOT_WIDTH_PCT * w)
+                roi = frame[y0:y1, x0:x1]
+                cards.append(self._detect_card_in_roi(roi))
+            return cards
+
         # 3. Player-1 --------------------------------------------------------
         p1_y0, p1_y1 = int(0.80 * h), h
         if include_initial_hands:
@@ -238,15 +252,24 @@ class OPTCGVision:
             BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y, right_to_left=True
         )
 
-        # 5. Pack observations ----------------------------------------------
+        # 5. Choice row ------------------------------------------------------
+        choice_cards: List[str] = []
+        if can_choose or can_draw:
+            choice_y0, choice_y1 = int(0.65 * h), int(0.85 * h)
+            choice_cards = scan_choices(choice_y0, choice_y1)
+
+        # 6. Pack observations ----------------------------------------------
         obs: Dict[str, Any] = {
             "can_attack": bool(buttons.get("attack")),
             "can_resolve": bool(buttons.get("resolve_attack")),
             "can_end_turn": bool(buttons.get("end_turn")),
+            "can_choose": can_choose,
+            "can_draw": can_draw,
             "latest_card_p1": latest_card_p1,
             "latest_card_p2": latest_card_p2,
             "board_p1": board_p1,
             "board_p2": board_p2,
+            "choice_cards": choice_cards,
         }
         if include_initial_hands:
             obs["initial_hand_p1"] = initial_hand_p1
@@ -280,14 +303,14 @@ def test_find(key: str):
 
 
 if __name__ == "__main__":
-    test_find("OP08-010")
-    # vision = OPTCGVision()
-    # try:
-    #     while True:
-    #         frame = vision.grab()
-    #         obs = vision.scan(True)
-    #         print(obs)
-    #         cv2.imshow("OPTCGSim vision test", frame)
-    #         cv2.waitKey(0)
-    # finally:
-    #     cv2.destroyAllWindows()
+    # test_find("OP08-010")
+    vision = OPTCGVision()
+    try:
+        while True:
+            frame = vision.grab()
+            obs = vision.scan(True)
+            print(obs)
+            cv2.imshow("OPTCGSim vision test", frame)
+            cv2.waitKey(0)
+    finally:
+        cv2.destroyAllWindows()
