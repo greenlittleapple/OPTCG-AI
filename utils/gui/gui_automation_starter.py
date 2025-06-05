@@ -76,9 +76,12 @@ def _get_optcg_window() -> gw.Window:
 def _send_click(win: gw.Window, x: int, y: int) -> None:
     """Send a left-click to *win* at absolute screen position ``(x, y)``.
 
-    Uses :mod:`pywin32` if available to avoid moving the real cursor. On
-    non-Windows platforms (or if pywin32 is not installed) this falls back to
-    :func:`pyautogui.click`.
+    Uses :mod:`pywin32` if available to avoid moving the real cursor. The
+    function first issues ``WM_MOUSEMOVE`` followed by ``WM_LBUTTONDOWN`` and
+    ``WM_LBUTTONUP`` via :func:`win32gui.SendMessage`.
+
+    On non-Windows platforms (or if pywin32 is not installed) this falls back
+    to :func:`pyautogui.click`.
     """
     if win32gui is None:
         pag.click(x, y)
@@ -86,8 +89,9 @@ def _send_click(win: gw.Window, x: int, y: int) -> None:
 
     client_x, client_y = win32gui.ScreenToClient(win._hWnd, (x, y))
     lparam = win32api.MAKELONG(client_x, client_y)
-    win32gui.PostMessage(win._hWnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
-    win32gui.PostMessage(win._hWnd, win32con.WM_LBUTTONUP, 0, lparam)
+    win32gui.SendMessage(win._hWnd, win32con.WM_MOUSEMOVE, 0, lparam)
+    win32gui.SendMessage(win._hWnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
+    win32gui.SendMessage(win._hWnd, win32con.WM_LBUTTONUP, 0, lparam)
 
 
 def click_relative_to_window(rel_x: float, rel_y: float, delay: float = CLICK_DELAY) -> None:
