@@ -162,7 +162,8 @@ class OPTCGVision:
             player and return `initial_hand_p1/p2`.  If False, skip that work.
 
         The function also scans each board slot for both players using preset
-        coordinates.
+        coordinates and looks for up to five selectable cards in the centre of
+        the screen (same width as the P1 hand but from 60–80% height).
 
         Returns:
             Observation dict.  Initial-hand keys appear only if requested.
@@ -216,6 +217,16 @@ class OPTCGVision:
                 slots.append(self._detect_card_in_roi(roi))
             return slots[::-1] if right_to_left else slots
 
+        def scan_choices(y0: int, y1: int) -> List[str]:
+            """Scan up to 5 selectable cards arranged like the P1 hand."""
+            cards: List[str] = []
+            for i in range(SLOTS):
+                x0 = int(SLOT_SHIFT_PCT * i * w)
+                x1 = int(x0 + SLOT_WIDTH_PCT * w)
+                roi = frame[y0:y1, x0:x1]
+                cards.append(self._detect_card_in_roi(roi))
+            return cards
+
         # 3. Player-1 --------------------------------------------------------
         p1_y0, p1_y1 = int(0.80 * h), h
         if include_initial_hands:
@@ -238,7 +249,11 @@ class OPTCGVision:
             BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y, right_to_left=True
         )
 
-        # 5. Pack observations ----------------------------------------------
+        # 5. Choice row ------------------------------------------------------
+        choice_y0, choice_y1 = int(0.60 * h), int(0.80 * h)
+        choice_cards = scan_choices(choice_y0, choice_y1)
+
+        # 6. Pack observations ----------------------------------------------
         obs: Dict[str, Any] = {
             "can_attack": bool(buttons.get("attack")),
             "can_resolve": bool(buttons.get("resolve_attack")),
@@ -247,6 +262,7 @@ class OPTCGVision:
             "latest_card_p2": latest_card_p2,
             "board_p1": board_p1,
             "board_p2": board_p2,
+            "choice_cards": choice_cards,
         }
         if include_initial_hands:
             obs["initial_hand_p1"] = initial_hand_p1
