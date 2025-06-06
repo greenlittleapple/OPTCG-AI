@@ -68,3 +68,24 @@ class OPTCGEnv(gym.Env if gym is not None else object):
         if self._steps >= self._max_steps:
             truncated = True
         return obs, reward, terminated, truncated, {}
+
+
+def main(num_steps: int = 10) -> None:
+    """Run a short random rollout for quick manual testing."""
+    env = OPTCGEnv(max_steps=num_steps)
+    obs, _ = env.reset()
+    print("reset ->", obs)
+    for t in range(num_steps):
+        if gym is not None and env.action_space is not None:
+            action = env.action_space.sample()
+        else:
+            action = t % 3  # deterministic fallback
+        obs, reward, terminated, truncated, _ = env.step(action)
+        print(f"step {t}: a={action} r={reward} term={terminated} trunc={truncated}")
+        if terminated or truncated:
+            break
+    print("final obs ->", obs)
+
+
+if __name__ == "__main__":
+    main()
