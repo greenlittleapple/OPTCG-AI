@@ -1,4 +1,4 @@
-# utils/vision/finder.py
+#!/usr/bin/env python
 """Template management + convenience find() wrapper for OPTCG-Sim automation.
 
 Changes in this version
@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-from capture import OPTCGVisionHelper
+from utils.vision.capture import OPTCGVisionHelper
 
 # ---------------------------------------------------------------------------
 # File-system layout (adjust if your repo moves)

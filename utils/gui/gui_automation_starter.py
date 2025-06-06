@@ -108,6 +108,7 @@ def click_action0() -> None:
 def click_end_turn() -> None:
     """Click End Turn with confirmation by clicking Action 0 twice."""
     click_action0()
+    time.sleep(CLICK_DELAY)
     click_action0()
 
 

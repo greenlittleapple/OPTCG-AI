@@ -1,4 +1,4 @@
-# utils/capture.py
+#!/usr/bin/env python
 """OPTCG‑Sim computer‑vision helpers
 ====================================
 Capture frames directly from the **OPTCGSim.exe** window—even when other
