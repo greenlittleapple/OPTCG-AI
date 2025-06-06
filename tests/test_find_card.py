@@ -23,7 +23,7 @@ def test_find_card():
     """
     Try up to 5 consecutive frames to catch the card; fail if none are found.
     """
-    finder = TEMPLATES.TemplateLoader()
+    finder = TEMPLATES.OPTCGVision()
     attempts, hits = 5, []
     for _ in range(attempts):
         hits = finder.find("OP10-001")
