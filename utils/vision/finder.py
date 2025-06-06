@@ -3,7 +3,7 @@
 
 Changes in this version
 -----------------------
-* All logic lives in **TemplateLoader** – easy to instantiate in tests.
+* All logic lives in **OPTCGVision** – easy to instantiate in tests.
 * A module-level singleton :data:`loader` preserves the old global behaviour.
 * Old helpers (:pydata:`vision`, :pyfunc:`find`, :pyfunc:`load_card`) now
   delegate to that singleton, so no refactor is required elsewhere.
@@ -278,6 +278,24 @@ class OPTCGVision:
             obs["initial_hand_p2"] = initial_hand_p2
 
         return obs
+
+
+# ---------------------------------------------------------------------------
+# Module-level convenience helpers -----------------------------------------
+# ---------------------------------------------------------------------------
+
+# Global singleton for convenience APIs
+loader = OPTCGVision()
+
+
+def find(key: str, frame: np.ndarray | None = None, is_card: bool = False) -> List[Match]:
+    """Module-level helper that delegates to :data:`loader`."""
+    return loader.find(key, frame=frame, is_card=is_card)
+
+
+def load_card(code: str) -> np.ndarray:
+    """Return the template image for *code* using the module loader."""
+    return loader.resolve(code)
 
 
 def test_find(key: str):
