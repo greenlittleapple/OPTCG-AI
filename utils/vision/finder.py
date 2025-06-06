@@ -142,7 +142,9 @@ class OPTCGVision:
             if frame is None:
                 return []
         threshold = 0.95
-        scales = 99/120 if is_card else (1.0) # scale to (in-game card size / card template size)
+        scales = (
+            99 / 120 if is_card else (1.0)
+        )  # scale to (in-game card size / card template size)
         hits = OPTCGVisionHelper.match_template(
             frame, template, threshold=threshold, scales=scales
         )
@@ -253,7 +255,7 @@ class OPTCGVision:
         )
 
         # 5. Choice row ------------------------------------------------------
-        choice_cards: List[str] = []
+        choice_cards: List[str] = ["", "", "", "", ""]
         if can_choose or can_draw:
             choice_y0, choice_y1 = int(0.65 * h), int(0.85 * h)
             choice_cards = scan_choices(choice_y0, choice_y1)
