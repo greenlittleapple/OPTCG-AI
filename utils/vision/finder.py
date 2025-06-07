@@ -12,12 +12,27 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
 
 from utils.vision.capture import OPTCGVisionHelper
+
+# ---------------------------------------------------------------------------
+# Configuration constants
+# ---------------------------------------------------------------------------
+
+# Portion of the card image to trim from each border before matching
+BORDER_PCT = 0.35
+
+# Scale to convert template size to in-game card size
+CARD_SCALE = 99 / 120
+
+# Default similarity threshold for template matching
+FIND_THRESHOLD = 0.8
+
+__all__ = ["OPTCGVision", "loader", "find", "load_card"]
 
 # ---------------------------------------------------------------------------
 # Helper: crop card borders
@@ -26,7 +41,6 @@ from utils.vision.capture import OPTCGVisionHelper
 
 def _crop_card_border(img: np.ndarray) -> np.ndarray:
     """Return the image cropped for template matching."""
-    BORDER_PCT = 0.35
     h, w = img.shape[:2]
     dx, dy = int(w * BORDER_PCT), int(h * BORDER_PCT)
     cropped = img[dy : h - dy, dx : w - dx]
@@ -40,7 +54,6 @@ def _crop_card_border(img: np.ndarray) -> np.ndarray:
 BASE_DIR = Path(__file__).resolve().parent.parent / "vision" / "templates"
 BUTTONS_DIR = BASE_DIR / "buttons"  # OPxx-###.png / .jpg live here
 CARDS_DIR = BASE_DIR / "cards"  # OPxx-###.png / .jpg live here
-LABELS_DIR = BASE_DIR / "labels"  # OPxx-###.png / .jpg live here
 
 # Automatically map card IDs to their template paths. The files currently use
 # the naming scheme "<card-id>_small.<ext>"; strip the suffix to obtain the
@@ -158,10 +171,8 @@ class OPTCGVision:
             frame = self.grab()
             if frame is None:
                 return []
-        threshold = 0.8
-        scales = (
-            99 / 120 if is_card else (1.0)
-        )  # scale to (in-game card size / card template size)
+        threshold = FIND_THRESHOLD
+        scales = CARD_SCALE if is_card else 1.0
         if rotated:
             template = cv2.rotate(template, cv2.ROTATE_90_CLOCKWISE)
         hits = OPTCGVisionHelper.match_template(
