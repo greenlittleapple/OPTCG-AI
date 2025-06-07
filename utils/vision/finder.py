@@ -20,6 +20,16 @@ import numpy as np
 from utils.vision.capture import OPTCGVisionHelper
 
 # ---------------------------------------------------------------------------
+# Helper: crop card borders
+# ---------------------------------------------------------------------------
+
+def _crop_border(img: np.ndarray, pct: float = 0.1) -> np.ndarray:
+    """Return the image cropped by *pct* from each side."""
+    h, w = img.shape[:2]
+    dx, dy = int(w * pct), int(h * pct)
+    return img[dy : h - dy, dx : w - dx]
+
+# ---------------------------------------------------------------------------
 # File-system layout (adjust if your repo moves)
 # ---------------------------------------------------------------------------
 
@@ -67,7 +77,7 @@ def _load_card_from_disk(code: str) -> np.ndarray:
         if path.is_file():
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is not None:
-                return img
+                return _crop_border(img)
     raise FileNotFoundError(f"Card template for {code!r} not found.")
 
 
@@ -99,6 +109,8 @@ class OPTCGVision:
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is None:
                 raise FileNotFoundError(path)
+            if key in CARDS:
+                img = _crop_border(img)
             self._static[key.lower()] = img
 
     # ------------------------------------------------------------------ #
@@ -157,6 +169,21 @@ class OPTCGVision:
                 return name
         return ""
 
+    def _detect_card_and_rest(self, roi: np.ndarray) -> Tuple[str, bool]:
+        """Return (card, rested) for the first matching card in `roi`."""
+        # Try upright orientation first
+        card = self._detect_card_in_roi(roi)
+        if card:
+            return card, False
+
+        # Try rotated 90 degrees clockwise (rested)
+        rotated = cv2.rotate(roi, cv2.ROTATE_90_CLOCKWISE)
+        card = self._detect_card_in_roi(rotated)
+        if card:
+            return card, True
+
+        return "", False
+
     def scan(self, include_initial_hands: bool = False) -> Dict[str, Any]:
         """Capture a frame and return high-level observations.
 
@@ -171,6 +198,8 @@ class OPTCGVision:
         Returns:
             Observation dict.  Initial-hand keys appear only if requested.
             Board state is always included under ``board_p1`` and ``board_p2``.
+            Additional ``rested_cards_p1`` and ``rested_cards_p2`` lists
+            indicate which board slots contain rested (rotated) cards.
         """
         frame = self.grab()
         h, w = frame.shape[:2]
@@ -208,10 +237,11 @@ class OPTCGVision:
 
         def scan_board(
             start_x: float, step_x: float, y_center: float, right_to_left: bool = False
-        ) -> List[str]:
+        ) -> Tuple[List[str], List[int]]:
             y0 = int((y_center - BOARD_HEIGHT_PCT / 2) * h)
             y1 = int((y_center + BOARD_HEIGHT_PCT / 2) * h)
             slots: List[str] = []
+            rested: List[int] = []
             for i in range(SLOTS):
                 center_x = start_x + step_x * i
                 x0 = int((center_x - BOARD_WIDTH_PCT / 2) * w)
@@ -219,8 +249,13 @@ class OPTCGVision:
                 roi = frame[y0:y1, x0:x1]
                 # cv2.imshow("board", roi)
                 # cv2.waitKey(0)
-                slots.append(self._detect_card_in_roi(roi))
-            return slots[::-1] if right_to_left else slots
+                card, is_rest = self._detect_card_and_rest(roi)
+                slots.append(card)
+                rested.append(int(is_rest))
+            if right_to_left:
+                slots = slots[::-1]
+                rested = rested[::-1]
+            return slots, rested
 
         def scan_choices(y0: int, y1: int) -> List[str]:
             """Scan up to 5 selectable cards arranged like the P1 hand."""
@@ -240,7 +275,7 @@ class OPTCGVision:
         else:
             latest_card_p1 = scan_hand(p1_y0, p1_y1, False)
             initial_hand_p1 = None
-        board_p1 = scan_board(BOARD_P1_START_X, BOARD_STEP_PCT, BOARD_P1_Y)
+        board_p1, rested_p1 = scan_board(BOARD_P1_START_X, BOARD_STEP_PCT, BOARD_P1_Y)
 
         # 4. Player-2 --------------------------------------------------------
         p2_y0, p2_y1 = 0, int(0.20 * h)
@@ -250,7 +285,7 @@ class OPTCGVision:
         else:
             latest_card_p2 = scan_hand(p2_y0, p2_y1, False)
             initial_hand_p2 = None
-        board_p2 = scan_board(
+        board_p2, rested_p2 = scan_board(
             BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y, right_to_left=True
         )
 
@@ -271,6 +306,8 @@ class OPTCGVision:
             "latest_card_p2": latest_card_p2,
             "board_p1": board_p1,
             "board_p2": board_p2,
+            "rested_cards_p1": rested_p1,
+            "rested_cards_p2": rested_p2,
             "choice_cards": choice_cards,
         }
         if include_initial_hands:
