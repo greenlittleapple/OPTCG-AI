@@ -23,17 +23,15 @@ from utils.vision.capture import OPTCGVisionHelper
 # Helper: crop card borders
 # ---------------------------------------------------------------------------
 
+
 def _crop_card_border(img: np.ndarray) -> np.ndarray:
     """Return the image cropped for template matching."""
-    BORDER_PCT = 0.1
-    TEXT_CROP_PCT = 0.4
+    BORDER_PCT = 0.35
     h, w = img.shape[:2]
     dx, dy = int(w * BORDER_PCT), int(h * BORDER_PCT)
     cropped = img[dy : h - dy, dx : w - dx]
-    cut = int(cropped.shape[0] * TEXT_CROP_PCT)
-    if cut:
-        cropped = cropped[:-cut, :]
     return cropped
+
 
 # ---------------------------------------------------------------------------
 # File-system layout (adjust if your repo moves)
@@ -148,6 +146,7 @@ class OPTCGVision:
         key: str,
         frame: np.ndarray | None = None,
         is_card: bool = False,
+        rotated: bool = False,
     ) -> List[Match]:
         """
         Locate all occurrences of *key* in *frame* (or current screen).
@@ -159,19 +158,21 @@ class OPTCGVision:
             frame = self.grab()
             if frame is None:
                 return []
-        threshold = 0.95
+        threshold = 0.8
         scales = (
             99 / 120 if is_card else (1.0)
         )  # scale to (in-game card size / card template size)
+        if rotated:
+            template = cv2.rotate(template, cv2.ROTATE_90_CLOCKWISE)
         hits = OPTCGVisionHelper.match_template(
             frame, template, threshold=threshold, scales=scales
         )
         return hits
 
-    def _detect_card_in_roi(self, roi: np.ndarray) -> str:
+    def _detect_card_in_roi(self, roi: np.ndarray, rotated: bool = False) -> str:
         """Return the first card template that matches in `roi`, else None."""
         for name in CARDS:  # simple linear scan
-            if self.find(name, frame=roi, is_card=True):
+            if self.find(name, frame=roi, is_card=True, rotated=rotated):
                 return name
         return ""
 
@@ -183,8 +184,7 @@ class OPTCGVision:
             return card, False
 
         # Try rotated 90 degrees clockwise (rested)
-        rotated = cv2.rotate(roi, cv2.ROTATE_90_CLOCKWISE)
-        card = self._detect_card_in_roi(rotated)
+        card = self._detect_card_in_roi(roi, rotated=True)
         if card:
             return card, True
 
@@ -242,7 +242,7 @@ class OPTCGVision:
                 return self._detect_card_in_roi(roi)
 
         def scan_board(
-            start_x: float, step_x: float, y_center: float, right_to_left: bool = False
+            start_x: float, step_x: float, y_center: float
         ) -> Tuple[List[str], List[int]]:
             y0 = int((y_center - BOARD_HEIGHT_PCT / 2) * h)
             y1 = int((y_center + BOARD_HEIGHT_PCT / 2) * h)
@@ -253,14 +253,9 @@ class OPTCGVision:
                 x0 = int((center_x - BOARD_WIDTH_PCT / 2) * w)
                 x1 = int((center_x + BOARD_WIDTH_PCT / 2) * w)
                 roi = frame[y0:y1, x0:x1]
-                # cv2.imshow("board", roi)
-                # cv2.waitKey(0)
                 card, is_rest = self._detect_card_and_rest(roi)
                 slots.append(card)
                 rested.append(int(is_rest))
-            if right_to_left:
-                slots = slots[::-1]
-                rested = rested[::-1]
             return slots, rested
 
         def scan_choices(y0: int, y1: int) -> List[str]:
@@ -291,9 +286,7 @@ class OPTCGVision:
         else:
             latest_card_p2 = scan_hand(p2_y0, p2_y1, False)
             initial_hand_p2 = None
-        board_p2, rested_p2 = scan_board(
-            BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y, right_to_left=True
-        )
+        board_p2, rested_p2 = scan_board(BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y)
 
         # 5. Choice row ------------------------------------------------------
         choice_cards: List[str] = ["", "", "", "", ""]
@@ -331,7 +324,9 @@ class OPTCGVision:
 loader = OPTCGVision()
 
 
-def find(key: str, frame: np.ndarray | None = None, is_card: bool = False) -> List[Match]:
+def find(
+    key: str, frame: np.ndarray | None = None, is_card: bool = False
+) -> List[Match]:
     """Module-level helper that delegates to :data:`loader`."""
     return loader.find(key, frame=frame, is_card=is_card)
 
@@ -347,6 +342,9 @@ def test_find(key: str):
         while True:
             frame = vision.grab()
             hits = vision.find(key, frame=frame, is_card=key in CARDS.keys())
+            hits += vision.find(
+                key, frame=frame, is_card=key in CARDS.keys(), rotated=True
+            )
             for (x, y), (w, h), score in hits:
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 cv2.putText(
@@ -366,7 +364,7 @@ def test_find(key: str):
 
 
 if __name__ == "__main__":
-    # test_find("OP08-010")
+    # test_find("OP08-013")
     vision = OPTCGVision()
     try:
         while True:
