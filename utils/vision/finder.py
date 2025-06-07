@@ -23,11 +23,17 @@ from utils.vision.capture import OPTCGVisionHelper
 # Helper: crop card borders
 # ---------------------------------------------------------------------------
 
-def _crop_border(img: np.ndarray, pct: float = 0.1) -> np.ndarray:
-    """Return the image cropped by *pct* from each side."""
+def _crop_card_border(img: np.ndarray) -> np.ndarray:
+    """Return the image cropped for template matching."""
+    BORDER_PCT = 0.1
+    TEXT_CROP_PCT = 0.4
     h, w = img.shape[:2]
-    dx, dy = int(w * pct), int(h * pct)
-    return img[dy : h - dy, dx : w - dx]
+    dx, dy = int(w * BORDER_PCT), int(h * BORDER_PCT)
+    cropped = img[dy : h - dy, dx : w - dx]
+    cut = int(cropped.shape[0] * TEXT_CROP_PCT)
+    if cut:
+        cropped = cropped[:-cut, :]
+    return cropped
 
 # ---------------------------------------------------------------------------
 # File-system layout (adjust if your repo moves)
@@ -77,7 +83,7 @@ def _load_card_from_disk(code: str) -> np.ndarray:
         if path.is_file():
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is not None:
-                return _crop_border(img)
+                return _crop_card_border(img)
     raise FileNotFoundError(f"Card template for {code!r} not found.")
 
 
@@ -110,7 +116,7 @@ class OPTCGVision:
             if img is None:
                 raise FileNotFoundError(path)
             if key in CARDS:
-                img = _crop_border(img)
+                img = _crop_card_border(img)
             self._static[key.lower()] = img
 
     # ------------------------------------------------------------------ #
