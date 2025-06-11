@@ -146,9 +146,10 @@ class OPTCGVision:
             key_lc = key.lower()
             if key in CARDS:
                 board_img = img if key in UNCROPPED_CARDS else _crop_card_border(img)
-                hand_img = _left_edge(img)
+                if key not in UNCROPPED_CARDS:
+                    hand_img = _left_edge(img)
+                    self._hand_templates[key_lc] = hand_img
                 self._board_templates[key_lc] = board_img
-                self._hand_templates[key_lc] = hand_img
                 self._static[key_lc] = board_img
             else:
                 self._static[key_lc] = img
@@ -214,6 +215,8 @@ class OPTCGVision:
     ) -> str:
         """Return the first card template that matches in `roi`, else None."""
         for name in CARDS:  # simple linear scan
+            if hand and name in UNCROPPED_CARDS:
+                continue
             if self.find(name, frame=roi, is_card=True, rotated=rotated, hand=hand):
                 return name
         return ""
@@ -273,6 +276,8 @@ class OPTCGVision:
             roi = frame[y0:y1, x0:x1]
             total = 0
             for name in CARDS:
+                if name in UNCROPPED_CARDS:
+                    continue
                 total += len(self.find(name, frame=roi, is_card=True, hand=True))
             return total
 
