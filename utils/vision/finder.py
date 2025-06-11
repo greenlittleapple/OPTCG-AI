@@ -241,8 +241,8 @@ class OPTCGVision:
         BOARD_P1_START_X, BOARD_P1_Y = 0.40, 0.6
         BOARD_P2_START_X, BOARD_P2_Y = 0.60, 0.45
         BOARD_HEIGHT_PCT = 0.20
-        DON_P1_START_X, DON_P1_END_X, DON_P1_Y = 0.40, 0.55, 0.90
-        DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.60, 0.45, 0.10
+        DON_P1_START_X, DON_P1_END_X, DON_P1_Y = 0.35, 0.6, 0.90
+        DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.65, 0.4, 0.15
         DON_HEIGHT_PCT = 0.20
 
         def scan_hand(y0: int, y1: int, ordered: bool):
