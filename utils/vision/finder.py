@@ -32,6 +32,10 @@ CARD_SCALE = 99 / 120
 # Default similarity threshold for template matching
 FIND_THRESHOLD = 0.8
 
+# Cards that should **not** be cropped when loaded. These cards may have
+# important details near the border that would be lost otherwise.
+UNCROPPED_CARDS = {"DON_side"}
+
 __all__ = ["OPTCGVision", "loader", "find", "load_card"]
 
 # ---------------------------------------------------------------------------
@@ -94,7 +98,9 @@ def _load_card_from_disk(code: str) -> np.ndarray:
         if path.is_file():
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is not None:
-                return _crop_card_border(img)
+                if code not in UNCROPPED_CARDS:
+                    img = _crop_card_border(img)
+                return img
     raise FileNotFoundError(f"Card template for {code!r} not found.")
 
 
@@ -126,7 +132,7 @@ class OPTCGVision:
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is None:
                 raise FileNotFoundError(path)
-            if key in CARDS:
+            if key in CARDS and key not in UNCROPPED_CARDS:
                 img = _crop_card_border(img)
             self._static[key.lower()] = img
 
@@ -286,17 +292,11 @@ class OPTCGVision:
             """Return the number of active DON cards in the specified row."""
             y0 = int((y_center - DON_HEIGHT_PCT / 2) * h)
             y1 = int((y_center + DON_HEIGHT_PCT / 2) * h)
-            step = (end_x - start_x) / 10
-            count = 0
-            for i in range(10):
-                left = start_x + step * i
-                right = start_x + step * (i + 1)
-                x0 = int(min(left, right) * w)
-                x1 = int(max(left, right) * w)
-                roi = frame[y0:y1, x0:x1]
-                if self.find("DON_side", frame=roi, is_card=True):
-                    count += 1
-            return count
+            x0 = int(min(start_x, end_x) * w)
+            x1 = int(max(start_x, end_x) * w)
+            roi = frame[y0:y1, x0:x1]
+            hits = self.find("DON_side", frame=roi, is_card=True)
+            return min(len(hits), 10)
 
         # 3. Player-1 --------------------------------------------------------
         p1_y0, p1_y1 = int(0.80 * h), h
