@@ -32,6 +32,10 @@ CARD_SCALE = 99 / 120
 # Default similarity threshold for template matching
 FIND_THRESHOLD = 0.8
 
+# Cards that should **not** be cropped when loaded. These cards may have
+# important details near the border that would be lost otherwise.
+UNCROPPED_CARDS = {"DON_side_p1", "DON_side_p2"}
+
 __all__ = ["OPTCGVision", "loader", "find", "load_card"]
 
 # ---------------------------------------------------------------------------
@@ -94,7 +98,9 @@ def _load_card_from_disk(code: str) -> np.ndarray:
         if path.is_file():
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is not None:
-                return _crop_card_border(img)
+                if code not in UNCROPPED_CARDS:
+                    img = _crop_card_border(img)
+                return img
     raise FileNotFoundError(f"Card template for {code!r} not found.")
 
 
@@ -126,7 +132,7 @@ class OPTCGVision:
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is None:
                 raise FileNotFoundError(path)
-            if key in CARDS:
+            if key in CARDS and key not in UNCROPPED_CARDS:
                 img = _crop_card_border(img)
             self._static[key.lower()] = img
 
@@ -235,6 +241,9 @@ class OPTCGVision:
         BOARD_P1_START_X, BOARD_P1_Y = 0.40, 0.6
         BOARD_P2_START_X, BOARD_P2_Y = 0.60, 0.45
         BOARD_HEIGHT_PCT = 0.20
+        DON_P1_START_X, DON_P1_END_X, DON_P1_Y = 0.40, 0.55, 0.90
+        DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.60, 0.45, 0.10
+        DON_HEIGHT_PCT = 0.20
 
         def scan_hand(y0: int, y1: int, ordered: bool):
             """Either return list of 5 slots (ordered=True) or only newest slot."""
@@ -279,6 +288,18 @@ class OPTCGVision:
                 cards.append(self._detect_card_in_roi(roi))
             return cards
 
+        def scan_don(
+            start_x: float, end_x: float, y_center: float, template: str
+        ) -> int:
+            """Return the number of active DON cards in the specified row."""
+            y0 = int((y_center - DON_HEIGHT_PCT / 2) * h)
+            y1 = int((y_center + DON_HEIGHT_PCT / 2) * h)
+            x0 = int(min(start_x, end_x) * w)
+            x1 = int(max(start_x, end_x) * w)
+            roi = frame[y0:y1, x0:x1]
+            hits = self.find(template, frame=roi, is_card=True)
+            return min(len(hits), 10)
+
         # 3. Player-1 --------------------------------------------------------
         p1_y0, p1_y1 = int(0.80 * h), h
         if include_initial_hands:
@@ -298,6 +319,13 @@ class OPTCGVision:
             latest_card_p2 = scan_hand(p2_y0, p2_y1, False)
             initial_hand_p2 = None
         board_p2, rested_p2 = scan_board(BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y)
+
+        num_active_don_p1 = scan_don(
+            DON_P1_START_X, DON_P1_END_X, DON_P1_Y, "DON_side_p1"
+        )
+        num_active_don_p2 = scan_don(
+            DON_P2_START_X, DON_P2_END_X, DON_P2_Y, "DON_side_p2"
+        )
 
         # 5. Choice row ------------------------------------------------------
         choice_cards: List[str] = ["", "", "", "", ""]
@@ -320,6 +348,8 @@ class OPTCGVision:
             "board_p2": board_p2,
             "rested_cards_p1": rested_p1,
             "rested_cards_p2": rested_p2,
+            "num_active_don_p1": num_active_don_p1,
+            "num_active_don_p2": num_active_don_p2,
             "choice_cards": choice_cards,
         }
         if include_initial_hands:
