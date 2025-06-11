@@ -259,8 +259,9 @@ class OPTCGVision:
         SLOT_WIDTH_PCT = 0.05
         SLOTS = 5
         HAND_TOTAL_WIDTH_PCT = 0.20
-        HAND_SCAN_X0 = 0.05
-        HAND_SCAN_X1 = 0.30
+        HAND_SCAN_X0 = 0.0
+        HAND_SCAN_X1 = 0.25
+        HAND_SLOT_START_PCT = 0.05
         CHOICE_SHIFT_PCT = 0.05
         BOARD_WIDTH_PCT, BOARD_STEP_PCT = 0.10, 0.06
         BOARD_P1_START_X, BOARD_P1_Y = 0.40, 0.6
@@ -287,7 +288,7 @@ class OPTCGVision:
                 return cards
             shift_pct = HAND_TOTAL_WIDTH_PCT / max(hand_size - 1, 1)
             for i in range(hand_size):
-                x0 = int(shift_pct * i * w)
+                x0 = int((HAND_SLOT_START_PCT + shift_pct * i) * w)
                 x1 = int(x0 + SLOT_WIDTH_PCT * w)
                 roi = frame[y0:y1, x0:x1]
                 cards.append(self._detect_card_in_roi(roi, hand=True))
