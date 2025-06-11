@@ -310,6 +310,8 @@ class OPTCGVision:
             "can_attack": bool(buttons.get("attack")),
             "can_resolve": bool(buttons.get("resolve_attack")),
             "can_end_turn": bool(buttons.get("end_turn")),
+            "can_return_cards": bool(buttons.get("return_cards_to_deck")),
+            "can_deploy": bool(buttons.get("deploy")),
             "can_choose": can_choose,
             "can_draw": can_draw,
             "latest_card_p1": latest_card_p1,
