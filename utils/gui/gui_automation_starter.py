@@ -199,6 +199,19 @@ def click_p2_hand(card_index: int, hand_size: int) -> None:
     rel_x = _hand_rel_x(card_index, hand_size)
     click_relative_to_window(rel_x, 0.10)
 
+# Choice card helpers ----------------------------------------------------
+
+_CHOICE_CARDS = 5
+_CHOICE_Y = 0.75
+
+
+def click_choice_card(card_index: int) -> None:
+    """Click one of the temporary choice cards displayed mid-screen."""
+    if not 0 <= card_index < _CHOICE_CARDS:
+        raise ValueError("card_index must be between 0 and 4 inclusive")
+    rel_x = _hand_rel_x(card_index, _CHOICE_CARDS)
+    click_relative_to_window(rel_x, _CHOICE_Y)
+
 # ---------------------------------------------------------------------------
 # DON card helpers  ----------------------------------------------------------
 # P1 row (unchanged)
