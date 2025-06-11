@@ -26,7 +26,7 @@ from utils.vision.capture import OPTCGVisionHelper
 # Portion of the card image to trim from each border before matching
 BORDER_PCT = 0.35
 # Portion of the card image to keep from the left when loading hand templates
-HAND_LEFT_PCT = 0.10
+HAND_LEFT_PCT = 0.20
 
 # Scale to convert template size to in-game card size
 CARD_SCALE = 99 / 120
@@ -256,10 +256,10 @@ class OPTCGVision:
         can_draw = bool(buttons.get("dont_draw_any"))
 
         # 2. Constants -------------------------------------------------------
-        SLOT_WIDTH_PCT = 0.10
+        SLOT_WIDTH_PCT = 0.05
         SLOTS = 5
         HAND_TOTAL_WIDTH_PCT = 0.20
-        HAND_SCAN_X0 = 0.0
+        HAND_SCAN_X0 = 0.05
         HAND_SCAN_X1 = 0.30
         CHOICE_SHIFT_PCT = 0.05
         BOARD_WIDTH_PCT, BOARD_STEP_PCT = 0.10, 0.06
