@@ -25,6 +25,8 @@ from utils.vision.capture import OPTCGVisionHelper
 
 # Portion of the card image to trim from each border before matching
 BORDER_PCT = 0.35
+# Portion of the card image to keep from the left when loading hand templates
+HAND_LEFT_PCT = 0.15
 
 # Scale to convert template size to in-game card size
 CARD_SCALE = 99 / 120
@@ -49,6 +51,13 @@ def _crop_card_border(img: np.ndarray) -> np.ndarray:
     dx, dy = int(w * BORDER_PCT), int(h * BORDER_PCT)
     cropped = img[dy : h - dy, dx : w - dx]
     return cropped
+
+
+def _left_edge(img: np.ndarray) -> np.ndarray:
+    """Return only the leftmost portion of a card image for hand detection."""
+    h, w = img.shape[:2]
+    width = int(w * HAND_LEFT_PCT)
+    return img[:, :width]
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +134,8 @@ class OPTCGVision:
     def __init__(self, static_paths: dict[str, Path] | None = None) -> None:
         self._helper = OPTCGVisionHelper()
         self._static: dict[str, np.ndarray] = {}
+        self._hand_templates: dict[str, np.ndarray] = {}
+        self._board_templates: dict[str, np.ndarray] = {}
 
         # Use caller-supplied dict or fallback to module constant
         paths = static_paths if static_paths is not None else STATIC_PATHS
@@ -132,9 +143,16 @@ class OPTCGVision:
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is None:
                 raise FileNotFoundError(path)
-            if key in CARDS and key not in UNCROPPED_CARDS:
-                img = _crop_card_border(img)
-            self._static[key.lower()] = img
+            key_lc = key.lower()
+            if key in CARDS:
+                board_img = img if key in UNCROPPED_CARDS else _crop_card_border(img)
+                if key not in UNCROPPED_CARDS:
+                    hand_img = _left_edge(img)
+                    self._hand_templates[key_lc] = hand_img
+                self._board_templates[key_lc] = board_img
+                self._static[key_lc] = board_img
+            else:
+                self._static[key_lc] = img
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -151,12 +169,16 @@ class OPTCGVision:
         """
         return self._helper.grab()
 
-    def resolve(self, key: str) -> np.ndarray:
+    def resolve(self, key: str, *, hand: bool = False) -> np.ndarray:
         """
         Return the image for *key* (static or card). Case-insensitive.
+
+        The ``hand`` flag selects the cropped template used for hand scanning.
         """
         key_lc = key.lower()
         if key_lc in self._static:
+            if key_lc in self._hand_templates:
+                return self._hand_templates[key_lc] if hand else self._board_templates[key_lc]
             return self._static[key_lc]
         return _load_card_from_disk(key)
 
@@ -166,18 +188,20 @@ class OPTCGVision:
         frame: np.ndarray | None = None,
         is_card: bool = False,
         rotated: bool = False,
+        *,
+        hand: bool = False,
     ) -> List[Match]:
         """
         Locate all occurrences of *key* in *frame* (or current screen).
 
         Returns list sorted by descending similarity score.
         """
-        template = self.resolve(key)
+        template = self.resolve(key, hand=hand)
         if frame is None:
             frame = self.grab()
             if frame is None:
                 return []
-        threshold = FIND_THRESHOLD
+        threshold = 0.9 if hand else FIND_THRESHOLD
         scales = CARD_SCALE if is_card else 1.0
         if rotated:
             template = cv2.rotate(template, cv2.ROTATE_90_CLOCKWISE)
@@ -186,10 +210,14 @@ class OPTCGVision:
         )
         return hits
 
-    def _detect_card_in_roi(self, roi: np.ndarray, rotated: bool = False) -> str:
+    def _detect_card_in_roi(
+        self, roi: np.ndarray, rotated: bool = False, *, hand: bool = False
+    ) -> str:
         """Return the first card template that matches in `roi`, else None."""
         for name in CARDS:  # simple linear scan
-            if self.find(name, frame=roi, is_card=True, rotated=rotated):
+            if hand and name in UNCROPPED_CARDS:
+                continue
+            if self.find(name, frame=roi, is_card=True, rotated=rotated, hand=hand):
                 return name
         return ""
 
@@ -207,22 +235,14 @@ class OPTCGVision:
 
         return "", False
 
-    def scan(self, include_initial_hands: bool = False) -> Dict[str, Any]:
+    def scan(self) -> Dict[str, Any]:
         """Capture a frame and return high-level observations.
 
-        Args:
-            include_initial_hands: If True, scan all five hand slots for each
-            player and return `initial_hand_p1/p2`.  If False, skip that work.
-
-        The function also scans each board slot for both players using preset
-        coordinates and looks for up to five selectable cards in the centre of
-        the screen (same width as the P1 hand but from 65–85% height).
+        The function scans player hands, board slots and other button cues.
 
         Returns:
-            Observation dict.  Initial-hand keys appear only if requested.
-            Board state is always included under ``board_p1`` and ``board_p2``.
-            Additional ``rested_cards_p1`` and ``rested_cards_p2`` lists
-            indicate which board slots contain rested (rotated) cards.
+            Observation dict containing board state, hand contents and button
+            cues.
         """
         frame = self.grab()
         h, w = frame.shape[:2]
@@ -236,7 +256,13 @@ class OPTCGVision:
         can_draw = bool(buttons.get("dont_draw_any"))
 
         # 2. Constants -------------------------------------------------------
-        SLOT_WIDTH_PCT, SLOT_SHIFT_PCT, SLOTS = 0.10, 0.05, 5
+        SLOT_WIDTH_PCT = 0.03
+        SLOTS = 5
+        HAND_TOTAL_WIDTH_PCT = 0.2
+        HAND_SCAN_X0 = 0.0
+        HAND_SCAN_X1 = 0.25
+        HAND_SLOT_START_PCT = 0.02
+        CHOICE_SHIFT_PCT = 0.05
         BOARD_WIDTH_PCT, BOARD_STEP_PCT = 0.10, 0.06
         BOARD_P1_START_X, BOARD_P1_Y = 0.40, 0.6
         BOARD_P2_START_X, BOARD_P2_Y = 0.60, 0.45
@@ -245,21 +271,30 @@ class OPTCGVision:
         DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.65, 0.4, 0.15
         DON_HEIGHT_PCT = 0.20
 
-        def scan_hand(y0: int, y1: int, ordered: bool):
-            """Either return list of 5 slots (ordered=True) or only newest slot."""
-            if ordered:
-                cards: List[Optional[str]] = []
-                for i in range(SLOTS):
-                    x0 = int(SLOT_SHIFT_PCT * i * w)
-                    x1 = int(x0 + SLOT_WIDTH_PCT * w)
-                    roi = frame[y0:y1, x0:x1]
-                    cards.append(self._detect_card_in_roi(roi))
+        def count_hand_cards(y0: int, y1: int) -> int:
+            x0 = int(HAND_SCAN_X0 * w)
+            x1 = int(HAND_SCAN_X1 * w)
+            roi = frame[y0:y1, x0:x1]
+            total = 0
+            for name in CARDS:
+                if name in UNCROPPED_CARDS:
+                    continue
+                total += len(self.find(name, frame=roi, is_card=True, hand=True))
+            return total
+
+        def scan_hand(y0: int, y1: int, hand_size: int) -> List[str]:
+            cards: List[str] = []
+            if hand_size == 0:
                 return cards
-            else:
-                x0 = int(SLOT_SHIFT_PCT * 4 * w)
+            shift_pct = HAND_TOTAL_WIDTH_PCT / max(hand_size - 1, 1)
+            for i in range(hand_size):
+                x0 = int((HAND_SLOT_START_PCT + shift_pct * i) * w)
                 x1 = int(x0 + SLOT_WIDTH_PCT * w)
                 roi = frame[y0:y1, x0:x1]
-                return self._detect_card_in_roi(roi)
+                # cv2.imshow('', roi)
+                # cv2.waitKey(0)
+                cards.append(self._detect_card_in_roi(roi, hand=True))
+            return cards
 
         def scan_board(
             start_x: float, step_x: float, y_center: float
@@ -282,7 +317,7 @@ class OPTCGVision:
             """Scan up to 5 selectable cards arranged like the P1 hand."""
             cards: List[str] = []
             for i in range(SLOTS):
-                x0 = int(SLOT_SHIFT_PCT * i * w)
+                x0 = int(CHOICE_SHIFT_PCT * i * w)
                 x1 = int(x0 + SLOT_WIDTH_PCT * w)
                 roi = frame[y0:y1, x0:x1]
                 cards.append(self._detect_card_in_roi(roi))
@@ -302,22 +337,14 @@ class OPTCGVision:
 
         # 3. Player-1 --------------------------------------------------------
         p1_y0, p1_y1 = int(0.80 * h), h
-        if include_initial_hands:
-            initial_hand_p1 = scan_hand(p1_y0, p1_y1, True)
-            latest_card_p1 = initial_hand_p1[4]
-        else:
-            latest_card_p1 = scan_hand(p1_y0, p1_y1, False)
-            initial_hand_p1 = None
+        p1_count = count_hand_cards(p1_y0, p1_y1)
+        hand_p1 = scan_hand(p1_y0, p1_y1, p1_count)
         board_p1, rested_p1 = scan_board(BOARD_P1_START_X, BOARD_STEP_PCT, BOARD_P1_Y)
 
         # 4. Player-2 --------------------------------------------------------
         p2_y0, p2_y1 = 0, int(0.20 * h)
-        if include_initial_hands:
-            initial_hand_p2 = scan_hand(p2_y0, p2_y1, True)
-            latest_card_p2 = initial_hand_p2[4]
-        else:
-            latest_card_p2 = scan_hand(p2_y0, p2_y1, False)
-            initial_hand_p2 = None
+        p2_count = count_hand_cards(p2_y0, p2_y1)
+        hand_p2 = scan_hand(p2_y0, p2_y1, p2_count)
         board_p2, rested_p2 = scan_board(BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y)
 
         num_active_don_p1 = scan_don(
@@ -342,8 +369,8 @@ class OPTCGVision:
             "can_deploy": bool(buttons.get("deploy")),
             "can_choose": can_choose,
             "can_draw": can_draw,
-            "latest_card_p1": latest_card_p1,
-            "latest_card_p2": latest_card_p2,
+            "hand_p1": hand_p1,
+            "hand_p2": hand_p2,
             "board_p1": board_p1,
             "board_p2": board_p2,
             "rested_cards_p1": rested_p1,
@@ -352,9 +379,6 @@ class OPTCGVision:
             "num_active_don_p2": num_active_don_p2,
             "choice_cards": choice_cards,
         }
-        if include_initial_hands:
-            obs["initial_hand_p1"] = initial_hand_p1
-            obs["initial_hand_p2"] = initial_hand_p2
 
         return obs
 
@@ -368,10 +392,14 @@ loader = OPTCGVision()
 
 
 def find(
-    key: str, frame: np.ndarray | None = None, is_card: bool = False
+    key: str,
+    frame: np.ndarray | None = None,
+    is_card: bool = False,
+    *,
+    hand: bool = False,
 ) -> List[Match]:
     """Module-level helper that delegates to :data:`loader`."""
-    return loader.find(key, frame=frame, is_card=is_card)
+    return loader.find(key, frame=frame, is_card=is_card, hand=hand)
 
 
 def load_card(code: str) -> np.ndarray:
@@ -412,7 +440,7 @@ if __name__ == "__main__":
     try:
         while True:
             frame = vision.grab()
-            obs = vision.scan(True)
+            obs = vision.scan()
             print(obs)
             cv2.imshow("OPTCGSim vision test", frame)
             cv2.waitKey(0)
