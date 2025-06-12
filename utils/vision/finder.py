@@ -65,7 +65,7 @@ def _left_edge(img: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent / "vision" / "templates"
-UNSCALED_DIR = BASE_DIR / "buttons"  # Unscaled template images live here
+UNSCALED_DIR = BASE_DIR / "unscaled"  # Unscaled template images live here
 CARDS_DIR = BASE_DIR / "cards"  # OPxx-###.png / .jpg live here
 
 # Automatically map card IDs to their template paths. The files currently use
@@ -250,8 +250,8 @@ class OPTCGVision:
         # 1. Button cues -----------------------------------------------------
         btn_y0, btn_y1 = int(0.50 * h), h
         btn_x0, btn_x1 = int(0.70 * w), w
-        cropped_buttons = frame[btn_y0:btn_y1, btn_x0:btn_x1]
-        buttons = {name: self.find(name, frame=cropped_buttons) for name in UNSCALED}
+        button_area = frame[btn_y0:btn_y1, btn_x0:btn_x1]
+        buttons = {name: self.find(name, frame=button_area) for name in UNSCALED}
         can_choose = bool(buttons.get("choose_0_targets"))
         can_draw = bool(buttons.get("dont_draw_any"))
 
@@ -272,7 +272,7 @@ class OPTCGVision:
         DON_HEIGHT_PCT = 0.20
         LIFE_P1_X0_PCT, LIFE_P1_Y0_PCT, LIFE_P1_X1_PCT, LIFE_P1_Y1_PCT = 0.30, 0.55, 0.40, 0.80
         LIFE_P2_X0_PCT, LIFE_P2_Y0_PCT, LIFE_P2_X1_PCT, LIFE_P2_Y1_PCT = 0.60, 0.20, 0.70, 0.45
-        LIFE_SCAN_PCT = 0.20
+        LIFE_SCAN_PCT = 0.10
 
         def count_life_cards(
             x0_pct: float,
