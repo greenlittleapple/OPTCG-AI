@@ -26,7 +26,7 @@ from utils.vision.capture import OPTCGVisionHelper
 # Portion of the card image to trim from each border before matching
 BORDER_PCT = 0.35
 # Portion of the card image to keep from the left when loading hand templates
-HAND_LEFT_PCT = 0.20
+HAND_LEFT_PCT = 0.15
 
 # Scale to convert template size to in-game card size
 CARD_SCALE = 99 / 120
@@ -201,7 +201,7 @@ class OPTCGVision:
             frame = self.grab()
             if frame is None:
                 return []
-        threshold = FIND_THRESHOLD
+        threshold = 0.9 if hand else FIND_THRESHOLD
         scales = CARD_SCALE if is_card else 1.0
         if rotated:
             template = cv2.rotate(template, cv2.ROTATE_90_CLOCKWISE)
@@ -256,12 +256,12 @@ class OPTCGVision:
         can_draw = bool(buttons.get("dont_draw_any"))
 
         # 2. Constants -------------------------------------------------------
-        SLOT_WIDTH_PCT = 0.05
+        SLOT_WIDTH_PCT = 0.03
         SLOTS = 5
-        HAND_TOTAL_WIDTH_PCT = 0.20
+        HAND_TOTAL_WIDTH_PCT = 0.2
         HAND_SCAN_X0 = 0.0
         HAND_SCAN_X1 = 0.25
-        HAND_SLOT_START_PCT = 0.05
+        HAND_SLOT_START_PCT = 0.02
         CHOICE_SHIFT_PCT = 0.05
         BOARD_WIDTH_PCT, BOARD_STEP_PCT = 0.10, 0.06
         BOARD_P1_START_X, BOARD_P1_Y = 0.40, 0.6
@@ -291,6 +291,8 @@ class OPTCGVision:
                 x0 = int((HAND_SLOT_START_PCT + shift_pct * i) * w)
                 x1 = int(x0 + SLOT_WIDTH_PCT * w)
                 roi = frame[y0:y1, x0:x1]
+                # cv2.imshow('', roi)
+                # cv2.waitKey(0)
                 cards.append(self._detect_card_in_roi(roi, hand=True))
             return cards
 
