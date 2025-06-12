@@ -65,7 +65,7 @@ def _left_edge(img: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent / "vision" / "templates"
-BUTTONS_DIR = BASE_DIR / "buttons"  # OPxx-###.png / .jpg live here
+UNSCALED_DIR = BASE_DIR / "buttons"  # Unscaled template images live here
 CARDS_DIR = BASE_DIR / "cards"  # OPxx-###.png / .jpg live here
 
 # Automatically map card IDs to their template paths. The files currently use
@@ -77,17 +77,17 @@ CARDS = {
     if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg"}
 }
 
-# Automatically map button names to their template paths. Any image file found
-# in ``BUTTONS_DIR`` becomes a key using its stem.
-BUTTONS = {
+# Automatically map unscaled template names to their paths. Any image file
+# found in ``UNSCALED_DIR`` becomes a key using its stem.
+UNSCALED = {
     p.stem: p
-    for p in BUTTONS_DIR.iterdir()
+    for p in UNSCALED_DIR.iterdir()
     if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg"}
 }
 
 STATIC_PATHS = {
     **CARDS,
-    **BUTTONS,
+    **UNSCALED,
 }
 
 # ---------------------------------------------------------------------------
@@ -251,7 +251,7 @@ class OPTCGVision:
         btn_y0, btn_y1 = int(0.50 * h), h
         btn_x0, btn_x1 = int(0.70 * w), w
         cropped_buttons = frame[btn_y0:btn_y1, btn_x0:btn_x1]
-        buttons = {name: self.find(name, frame=cropped_buttons) for name in BUTTONS}
+        buttons = {name: self.find(name, frame=cropped_buttons) for name in UNSCALED}
         can_choose = bool(buttons.get("choose_0_targets"))
         can_draw = bool(buttons.get("dont_draw_any"))
 
@@ -270,6 +270,16 @@ class OPTCGVision:
         DON_P1_START_X, DON_P1_END_X, DON_P1_Y = 0.35, 0.6, 0.90
         DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.65, 0.4, 0.15
         DON_HEIGHT_PCT = 0.20
+
+        def count_life_cards(x0_pct: float, y0_pct: float, x1_pct: float, y1_pct: float) -> int:
+            """Return the number of life cards in the specified region."""
+            x0 = int(x0_pct * w)
+            x1 = int(x1_pct * w)
+            y0 = int(y0_pct * h)
+            y1 = int(y1_pct * h)
+            roi = frame[y0:y1, x0:x1]
+            hits = self.find("card_back", frame=roi, is_card=True)
+            return len(hits)
 
         def count_hand_cards(y0: int, y1: int) -> int:
             x0 = int(HAND_SCAN_X0 * w)
@@ -340,12 +350,14 @@ class OPTCGVision:
         p1_count = count_hand_cards(p1_y0, p1_y1)
         hand_p1 = scan_hand(p1_y0, p1_y1, p1_count)
         board_p1, rested_p1 = scan_board(BOARD_P1_START_X, BOARD_STEP_PCT, BOARD_P1_Y)
+        num_life_p1 = count_life_cards(0.30, 0.55, 0.40, 0.80)
 
         # 4. Player-2 --------------------------------------------------------
         p2_y0, p2_y1 = 0, int(0.20 * h)
         p2_count = count_hand_cards(p2_y0, p2_y1)
         hand_p2 = scan_hand(p2_y0, p2_y1, p2_count)
         board_p2, rested_p2 = scan_board(BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y)
+        num_life_p2 = count_life_cards(0.60, 0.20, 0.70, 0.45)
 
         num_active_don_p1 = scan_don(
             DON_P1_START_X, DON_P1_END_X, DON_P1_Y, "DON_side_p1"
@@ -377,6 +389,8 @@ class OPTCGVision:
             "rested_cards_p2": rested_p2,
             "num_active_don_p1": num_active_don_p1,
             "num_active_don_p2": num_active_don_p2,
+            "num_life_p1": num_life_p1,
+            "num_life_p2": num_life_p2,
             "choice_cards": choice_cards,
         }
 
