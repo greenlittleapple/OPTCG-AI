@@ -270,14 +270,29 @@ class OPTCGVision:
         DON_P1_START_X, DON_P1_END_X, DON_P1_Y = 0.35, 0.6, 0.90
         DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.65, 0.4, 0.15
         DON_HEIGHT_PCT = 0.20
+        LIFE_P1_X0_PCT, LIFE_P1_Y0_PCT, LIFE_P1_X1_PCT, LIFE_P1_Y1_PCT = 0.30, 0.55, 0.40, 0.80
+        LIFE_P2_X0_PCT, LIFE_P2_Y0_PCT, LIFE_P2_X1_PCT, LIFE_P2_Y1_PCT = 0.60, 0.20, 0.70, 0.45
+        LIFE_SCAN_PCT = 0.20
 
-        def count_life_cards(x0_pct: float, y0_pct: float, x1_pct: float, y1_pct: float) -> int:
+        def count_life_cards(
+            x0_pct: float,
+            y0_pct: float,
+            x1_pct: float,
+            y1_pct: float,
+            *,
+            bottom: bool,
+        ) -> int:
             """Return the number of life cards in the specified region."""
             x0 = int(x0_pct * w)
             x1 = int(x1_pct * w)
             y0 = int(y0_pct * h)
             y1 = int(y1_pct * h)
             roi = frame[y0:y1, x0:x1]
+            crop_h = int(roi.shape[0] * LIFE_SCAN_PCT)
+            if bottom:
+                roi = roi[roi.shape[0] - crop_h :, :]
+            else:
+                roi = roi[:crop_h, :]
             hits = self.find("card_back", frame=roi, is_card=True)
             return len(hits)
 
@@ -350,14 +365,26 @@ class OPTCGVision:
         p1_count = count_hand_cards(p1_y0, p1_y1)
         hand_p1 = scan_hand(p1_y0, p1_y1, p1_count)
         board_p1, rested_p1 = scan_board(BOARD_P1_START_X, BOARD_STEP_PCT, BOARD_P1_Y)
-        num_life_p1 = count_life_cards(0.30, 0.55, 0.40, 0.80)
+        num_life_p1 = count_life_cards(
+            LIFE_P1_X0_PCT,
+            LIFE_P1_Y0_PCT,
+            LIFE_P1_X1_PCT,
+            LIFE_P1_Y1_PCT,
+            bottom=True,
+        )
 
         # 4. Player-2 --------------------------------------------------------
         p2_y0, p2_y1 = 0, int(0.20 * h)
         p2_count = count_hand_cards(p2_y0, p2_y1)
         hand_p2 = scan_hand(p2_y0, p2_y1, p2_count)
         board_p2, rested_p2 = scan_board(BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y)
-        num_life_p2 = count_life_cards(0.60, 0.20, 0.70, 0.45)
+        num_life_p2 = count_life_cards(
+            LIFE_P2_X0_PCT,
+            LIFE_P2_Y0_PCT,
+            LIFE_P2_X1_PCT,
+            LIFE_P2_Y1_PCT,
+            bottom=False,
+        )
 
         num_active_don_p1 = scan_don(
             DON_P1_START_X, DON_P1_END_X, DON_P1_Y, "DON_side_p1"
