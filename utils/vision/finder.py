@@ -288,12 +288,17 @@ class OPTCGVision:
             y0 = int(y0_pct * h)
             y1 = int(y1_pct * h)
             roi = frame[y0:y1, x0:x1]
-            crop_h = int(roi.shape[0] * LIFE_SCAN_PCT)
+
+            template = self.resolve("card_back")
+            tpl_h = int(template.shape[0] * LIFE_SCAN_PCT)
             if bottom:
-                roi = roi[roi.shape[0] - crop_h :, :]
+                template = template[template.shape[0] - tpl_h :, :]
             else:
-                roi = roi[:crop_h, :]
-            hits = self.find("card_back", frame=roi, is_card=True)
+                template = template[:tpl_h, :]
+
+            hits = OPTCGVisionHelper.match_template(
+                roi, template, threshold=FIND_THRESHOLD, scales=1.0
+            )
             return len(hits)
 
         def count_hand_cards(y0: int, y1: int) -> int:
