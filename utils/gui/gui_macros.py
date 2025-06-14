@@ -166,7 +166,6 @@ def attach_don(
     click_don = GUI.click_p1_don if acting_player == 1 else GUI.click_p2_don
 
     # --- Compute DON indices to click -------------------------------
-    start_idx = total_don - attachable_don  # first attachable DON index
     first_to_click = total_don - num_to_attach
     don_indices = range(first_to_click, total_don)  # inclusive‑exclusive
 
