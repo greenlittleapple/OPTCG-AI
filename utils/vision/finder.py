@@ -252,7 +252,7 @@ class OPTCGVision:
         btn_x0, btn_x1 = int(0.70 * w), w
         button_area = frame[btn_y0:btn_y1, btn_x0:btn_x1]
         buttons = {name: self.find(name, frame=button_area) for name in UNSCALED}
-        can_choose = bool(buttons.get("choose_0_targets"))
+        can_choose_from_top = bool(buttons.get("choose_0_targets")) or bool(buttons.get("choose_-1_targets"))
         can_draw = bool(buttons.get("dont_draw_any"))
 
         # 2. Constants -------------------------------------------------------
@@ -400,19 +400,22 @@ class OPTCGVision:
 
         # 5. Choice row ------------------------------------------------------
         choice_cards: List[str] = ["", "", "", "", ""]
-        if can_choose or can_draw:
+        if can_choose_from_top or can_draw:
             choice_y0, choice_y1 = int(0.65 * h), int(0.85 * h)
             choice_cards = scan_choices(choice_y0, choice_y1)
 
         # 6. Pack observations ----------------------------------------------
         obs: Dict[str, Any] = {
             "can_attack": bool(buttons.get("attack")),
-            "can_resolve": bool(buttons.get("resolve_attack")),
-            "can_end_turn": bool(buttons.get("end_turn")),
-            "can_return_cards": bool(buttons.get("return_cards_to_deck")),
+            "can_blocker": bool(buttons.get("no_blocker")),
+            "can_choose_from_top": can_choose_from_top,
+            "can_choose_friendly_target": bool(buttons.get("choose_0_friendly_targets")) or bool(buttons.get("select_character_to_replace")),
+            "can_choose_enemy_target": bool(buttons.get("select_target")),
             "can_deploy": bool(buttons.get("deploy")),
-            "can_choose": can_choose,
             "can_draw": can_draw,
+            "can_end_turn": bool(buttons.get("end_turn")),
+            "can_resolve": bool(buttons.get("resolve_attack")),
+            "can_return_cards": bool(buttons.get("return_cards_to_deck")),
             "hand_p1": hand_p1,
             "hand_p2": hand_p2,
             "board_p1": board_p1,
