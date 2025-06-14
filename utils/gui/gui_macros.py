@@ -12,6 +12,7 @@ Public API
   multi‑target card actions.
 * attack()         – convenience wrapper for the common "Action 1 = Attack"
   pattern that lets you specify any acting *and* target card.
+* deploy_card()    – select a card from hand and confirm with Action 1.
 * attach_don()     – attach one or more DON!! cards to a specified card on
   the active player's board.
 
@@ -97,6 +98,37 @@ def attack(
     )
 
 
+def deploy_card(
+    acting_player: int,
+    hand_card_index: int,
+    hand_size: int,
+) -> None:
+    """Deploy a card from the acting player's hand and confirm.
+
+    Parameters
+    ----------
+    acting_player : int
+        1 for Player 1, 2 for Player 2.
+    hand_card_index : int
+        Index of the card to deploy (0 = left‑most).
+    hand_size : int
+        Total number of cards currently in that hand.
+    """
+    # --- Validate ----------------------------------------------------
+    if acting_player not in (1, 2):
+        raise ValueError("acting_player must be 1 or 2")
+    if hand_size < 1:
+        raise ValueError("hand_size must be at least 1")
+    if not 0 <= hand_card_index < hand_size:
+        raise ValueError("hand_card_index must be within hand_size")
+
+    # --- Select card from hand --------------------------------------
+    _click_hand_card(acting_player, hand_card_index, hand_size)
+
+    # --- Confirm with Action 1 --------------------------------------
+    GUI.click_action1()
+
+
 def attach_don(
     acting_player: int,
     card_index: int,
@@ -175,3 +207,10 @@ def _click_board_card(player: int, idx: int) -> None:
             GUI.click_p2_leader()
         else:
             GUI.click_p2_card(idx - 1)
+
+
+def _click_hand_card(player: int, idx: int, hand_size: int) -> None:
+    if player == 1:
+        GUI.click_p1_hand(card_index=idx, hand_size=hand_size)
+    else:
+        GUI.click_p2_hand(card_index=idx, hand_size=hand_size)
