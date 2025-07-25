@@ -3,16 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import time
-from typing import Any, List, Tuple
+from typing import Any, Dict, List
 
-try:
-    import gym
-    from gym import spaces
-except Exception:  # pragma: no cover - gym is optional for linting/test envs
-    gym = None
-    spaces = None
+from gymnasium import spaces
+from pettingzoo.utils.env import AECEnv
+from pettingzoo.utils.agent_selector import agent_selector
 
-from utils.gui import gui_macros as MACROS
 from utils.gui import gui_automation_starter as GUI
 from utils.vision import finder
 
@@ -38,31 +34,46 @@ class OPTCGPlayerObs:
     num_life: int
     num_life_opponent: int
 
-class OPTCGEnv(gym.Env if gym is not None else object):
-    """Minimal OPTCGSim environment following the Gym API."""
+class OPTCGEnv(AECEnv):
+    """Minimal OPTCGSim environment using the PettingZoo AEC API."""
+
+    metadata = {"name": "optcg_aec"}
 
     _acting_player: int = 0
 
     def __init__(self, max_steps: int = 50, step_delay: float = 0.5) -> None:
         super().__init__()
-        # Instantiate the vision helper used for observation gathering
-        self._vision = finder.OPTCGVision()
-        self._max_steps = max_steps
-        self._delay = step_delay
-        self._steps = 0
+        self.possible_agents = ["player_0", "player_1"]
+        self.agent_name_mapping = {agent: i for i, agent in enumerate(self.possible_agents)}
 
-        if spaces is not None:
-            self.action_space = spaces.Discrete(3)
-            self.observation_space = spaces.Dict(
+        self._action_spaces = {agent: spaces.Discrete(3) for agent in self.possible_agents}
+        self._observation_spaces = {
+            agent: spaces.Dict(
                 {
                     "can_attack": spaces.Discrete(2),
                     "can_resolve": spaces.Discrete(2),
                     "can_end_turn": spaces.Discrete(2),
                 }
             )
-        else:  # pragma: no cover
-            self.action_space = None  # type: ignore
-            self.observation_space = None  # type: ignore
+            for agent in self.possible_agents
+        }
+
+        self.action_spaces = self._action_spaces
+        self.observation_spaces = self._observation_spaces
+
+        self._vision = finder.OPTCGVision()
+        self._max_steps = max_steps
+        self._delay = step_delay
+        self._steps = 0
+
+        self._agent_selector = agent_selector(self.possible_agents)
+        self.agents: List[str] = []
+        self.rewards: Dict[str, float] = {}
+        self.terminations: Dict[str, bool] = {}
+        self.truncations: Dict[str, bool] = {}
+        self.infos: Dict[str, Dict[str, Any]] = {}
+        self._cumulative_rewards: Dict[str, float] = {}
+        self._observations: Dict[str, OPTCGPlayerObs] = {}
 
     def scan_and_process(self) -> OPTCGPlayerObs:
         proceed = False
@@ -97,49 +108,69 @@ class OPTCGEnv(gym.Env if gym is not None else object):
     # ------------------------------------------------------------------
     # Core API
     # ------------------------------------------------------------------
-    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> Tuple[OPTCGPlayerObs, dict[str, Any]]:
-        if gym is not None:
-            super().reset(seed=seed)
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> None:
+        super().reset(seed=seed)
+        self.agents = self.possible_agents[:]
+        self._agent_selector = agent_selector(self.agents)
+        self.agent_selection = self._agent_selector.next()
+
+        self.rewards = {agent: 0.0 for agent in self.agents}
+        self._cumulative_rewards = {agent: 0.0 for agent in self.agents}
+        self.terminations = {agent: False for agent in self.agents}
+        self.truncations = {agent: False for agent in self.agents}
+        self.infos = {agent: {} for agent in self.agents}
+
         self._steps = 0
-        obs = self.scan_and_process()
-        return obs, {}
+        self._acting_player = self.agent_name_mapping[self.agent_selection]
+        self._observations[self.agent_selection] = self.scan_and_process()
 
-    def step(self, action: int, debug = False) -> Tuple[OPTCGPlayerObs, float, bool, bool, dict[str, Any]]:
-        """Execute *action* and return the new observation."""
-        terminated = False
-        truncated = False
+    def observe(self, agent: str) -> OPTCGPlayerObs | None:
+        return self._observations.get(agent)
+
+    def step(self, action: int | None, debug: bool = False) -> None:
+        """Execute *action* for the current agent."""
+        agent = self.agent_selection
+        if self.terminations[agent] or self.truncations[agent]:
+            self._was_dead_step(action)
+            return
+
         reward = 0.0
-
         # action goes here
         time.sleep(self._delay)
 
-        obs = self.scan_and_process()
-        if obs.can_resolve:
+        self._observations[agent] = self.scan_and_process()
+        if self._observations[agent].can_resolve:
             reward += 1.0
+
+        self.rewards[agent] = reward
         self._steps += 1
         if self._steps >= self._max_steps:
-            truncated = True
+            for a in self.agents:
+                self.truncations[a] = True
+
         if debug:
             print(f"--- ACTION: {action}")
-            print(f"--- OBS: {obs}")
-        return obs, reward, terminated, truncated, {}
+            print(f"--- OBS: {self._observations[agent]}")
+
+        self._accumulate_rewards()
+        self.agent_selection = self._agent_selector.next()
+        self._acting_player = self.agent_name_mapping[self.agent_selection]
+        if self.agents:
+            self._observations[self.agent_selection] = self.scan_and_process()
 
 
 def main(num_steps: int = 10) -> None:
     """Run a short random rollout for quick manual testing."""
     env = OPTCGEnv(max_steps=num_steps)
-    obs, _ = env.reset()
-    print("reset ->", obs)
-    for t in range(num_steps):
-        if gym is not None and env.action_space is not None:
-            action = env.action_space.sample()
-        else:
-            action = t % 3  # deterministic fallback
-        obs, reward, terminated, truncated, _ = env.step(action, debug=True)
-        print(f"step {t}: a={action} r={reward} term={terminated} trunc={truncated}")
+    env.reset()
+    for t, agent in enumerate(env.agent_iter(num_steps)):
+        obs, reward, terminated, truncated, _ = env.last()
         if terminated or truncated:
-            break
-    print("final obs ->", obs)
+            env.step(None)
+            continue
+        action = env.action_space(agent).sample()
+        env.step(action, debug=True)
+        print(f"{agent} step {t}: a={action} r={reward} term={terminated} trunc={truncated}")
 
 
 if __name__ == "__main__":
