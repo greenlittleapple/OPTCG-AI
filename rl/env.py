@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import time
-from typing import Any, List
+from typing import Any, List, get_args, get_origin
 
 from pettingzoo.utils.env import AECEnv
 from gymnasium import spaces
@@ -39,6 +39,25 @@ class OPTCGEnv(AECEnv):
 
     metadata = {"name": "optcg_v1"}
 
+    @staticmethod
+    def _build_obs_space() -> spaces.Dict:
+        """Generate an observation space based on :class:`OPTCGPlayerObs`."""
+        space_mapping: dict[str, spaces.Space] = {}
+        for field in fields(OPTCGPlayerObs):
+            typ = field.type
+            name = field.name
+            if typ is bool:
+                space_mapping[name] = spaces.Discrete(2)
+            elif typ is int:
+                space_mapping[name] = spaces.Discrete(11)
+            elif get_origin(typ) in (list, List):
+                subtype = get_args(typ)[0]
+                if subtype is str:
+                    space_mapping[name] = spaces.Sequence(spaces.Text(max_length=10))
+                elif subtype is int:
+                    space_mapping[name] = spaces.Sequence(spaces.Discrete(99))
+        return spaces.Dict(space_mapping)
+
     def __init__(self, max_steps: int = 50, step_delay: float = 0.5) -> None:
         super().__init__()
         # Instantiate the vision helper used for observation gathering
@@ -51,32 +70,8 @@ class OPTCGEnv(AECEnv):
         self.agents: List[str] = []
 
         self.action_spaces = {agent: spaces.Discrete(3) for agent in self.possible_agents}
-        self.observation_spaces = {
-            agent: spaces.Dict(
-                {
-                    "can_attack": spaces.Discrete(2),
-                    "can_blocker": spaces.Discrete(2),
-                    "can_choose_from_top": spaces.Discrete(2),
-                    "can_choose_friendly_target": spaces.Discrete(2),
-                    "can_choose_enemy_target": spaces.Discrete(2),
-                    "can_deploy": spaces.Discrete(2),
-                    "can_draw": spaces.Discrete(2),
-                    "can_end_turn": spaces.Discrete(2),
-                    "can_resolve": spaces.Discrete(2),
-                    "choice_cards": spaces.Sequence(spaces.Text()),
-                    "hand": spaces.Sequence(spaces.Text()),
-                    "board": spaces.Sequence(spaces.Text()),
-                    "board_opponent": spaces.Sequence(spaces.Text()),
-                    "rested_cards": spaces.Sequence(spaces.Discrete(99)),
-                    "rested_cards_opponent": spaces.Sequence(spaces.Discrete(99)),
-                    "num_active_don": spaces.Discrete(11),
-                    "num_active_don_opponent": spaces.Discrete(11),
-                    "num_life": spaces.Discrete(11),
-                    "num_life_opponent": spaces.Discrete(11),
-                }
-            )
-            for agent in self.possible_agents
-        }
+        obs_space = self._build_obs_space()
+        self.observation_spaces = {agent: obs_space for agent in self.possible_agents}
 
     def scan_and_process(self) -> OPTCGPlayerObs:
         proceed = False
