@@ -133,16 +133,20 @@ class OPTCGEnv(AECEnv):
 
         self._clear_rewards()
 
+        reward = 0.0
         if self.agent_selection == "player_0":
-            # Player 0 action logic
-            pass
+            if action == 0:
+                reward = 1.0
+            elif action == 1:
+                reward = -1.0
         else:
-            # Player 1 action logic
-            pass
+            if action == 1:
+                reward = 1.0
+            elif action == 0:
+                reward = -1.0
         time.sleep(self._delay)
 
         obs = self.scan_and_process()
-        reward = 1.0 if obs.can_resolve else 0.0
         self.rewards[self.agent_selection] = reward
         self._last_obs[self.agent_selection] = obs
 

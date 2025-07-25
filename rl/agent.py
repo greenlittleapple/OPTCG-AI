@@ -3,14 +3,14 @@ from __future__ import annotations
 import random
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Callable, Deque, Dict, List, Tuple
+from typing import Callable, Deque, List, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from .env import OPTCGEnv
+from .env import OPTCGEnv, OPTCGPlayerObs
 
 
 @dataclass
@@ -60,7 +60,8 @@ class DQNAgent:
 
         obs_dim = 3
         agent_name = self.env.possible_agents[0]
-        action_dim = self.env.action_spaces[agent_name].n
+        action_space = self.env.action_spaces[agent_name]
+        action_dim = action_space.n if hasattr(action_space, "n") else 3
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.policy_net = QNetwork(obs_dim, action_dim).to(self.device)
@@ -76,13 +77,13 @@ class DQNAgent:
     # Utility helpers
     # ------------------------------------------------------------------
     @staticmethod
-    def _obs_to_array(obs: Dict[str, Any]) -> np.ndarray:
+    def _obs_to_array(obs: OPTCGPlayerObs) -> np.ndarray:
         return np.array(
-            [obs.get("can_attack", 0), obs.get("can_resolve", 0), obs.get("can_end_turn", 0)],
+            [float(obs.can_attack), float(obs.can_resolve), float(obs.can_end_turn)],
             dtype=np.float32,
         )
 
-    def _select_action(self, obs: Dict[str, Any], training: bool = True) -> int:
+    def _select_action(self, obs: OPTCGPlayerObs, training: bool = True) -> int:
         if training and random.random() < self.epsilon:
             agent_name = self.env.possible_agents[0]
             return int(self.env.action_spaces[agent_name].sample())
@@ -92,7 +93,14 @@ class DQNAgent:
             q_values = self.policy_net(state)
         return int(torch.argmax(q_values).item())
 
-    def _store(self, obs: Dict[str, Any], action: int, reward: float, next_obs: Dict[str, Any], done: bool) -> None:
+    def _store(
+        self,
+        obs: OPTCGPlayerObs,
+        action: int,
+        reward: float,
+        next_obs: OPTCGPlayerObs,
+        done: bool,
+    ) -> None:
         state = self._obs_to_array(obs)
         next_state = self._obs_to_array(next_obs)
         self.memory.append((state, action, reward, next_state, done))
@@ -100,9 +108,9 @@ class DQNAgent:
     # ------------------------------------------------------------------
     # Learning
     # ------------------------------------------------------------------
-    def _optimize_model(self) -> None:
+    def _optimize_model(self) -> float | None:
         if len(self.memory) < self.config.batch_size:
-            return
+            return None
         batch = random.sample(self.memory, self.config.batch_size)
         states, actions, rewards, next_states, dones = map(np.stack, zip(*batch))
 
@@ -122,14 +130,19 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
+        return float(loss.item())
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
     def train(self, episodes: int = 100) -> None:
         for ep in range(1, episodes + 1):
+            print(f"\nEpisode {ep} starting...")
             self.env.reset()
             obs, _, terminated, truncated, _ = self.env.last()
             done = terminated or truncated
+            step = 0
+            ep_reward = 0.0
             while not done:
                 action = self._select_action(obs)
                 self.env.step(action)
@@ -137,8 +150,12 @@ class DQNAgent:
                 done = terminated or truncated
 
                 self._store(obs, action, reward, next_obs, done)
-                self._optimize_model()
+                loss = self._optimize_model()
                 obs = next_obs
+
+                ep_reward += reward
+                print(f"Ep {ep} Step {step}: action={action} reward={reward:.2f} loss={loss}")
+                step += 1
 
                 for hook in self.hooks:
                     hook(self)
@@ -147,8 +164,9 @@ class DQNAgent:
                 self.target_net.load_state_dict(self.policy_net.state_dict())
 
             self.epsilon = max(self.config.epsilon_end, self.epsilon * self.config.epsilon_decay)
+            print(f"Episode {ep} finished. Total reward: {ep_reward:.2f}\n")
 
-    def act(self, obs: Dict[str, Any]) -> int:
+    def act(self, obs: OPTCGPlayerObs) -> int:
         """Return the greedy action for *obs* (no exploration)."""
         return self._select_action(obs, training=False)
 
