@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from pprint import pprint
 from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
@@ -153,6 +154,10 @@ class OPTCGVision:
                 self._static[key_lc] = board_img
             else:
                 self._static[key_lc] = img
+
+    def _show_debug(self, roi: np.ndarray):
+        cv2.imshow('debug', roi)
+        cv2.waitKey()
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -316,13 +321,11 @@ class OPTCGVision:
             cards: List[str] = []
             if hand_size == 0:
                 return cards
-            shift_pct = HAND_TOTAL_WIDTH_PCT / max(hand_size - 1, 1)
+            shift_pct = HAND_TOTAL_WIDTH_PCT / max(hand_size - 1, 4)
             for i in range(hand_size):
                 x0 = int((HAND_SLOT_START_PCT + shift_pct * i) * w)
                 x1 = int(x0 + SLOT_WIDTH_PCT * w)
                 roi = frame[y0:y1, x0:x1]
-                # cv2.imshow('', roi)
-                # cv2.waitKey(0)
                 cards.append(self._detect_card_in_roi(roi, hand=True))
             return cards
 
@@ -347,10 +350,10 @@ class OPTCGVision:
             """Scan up to 5 selectable cards arranged like the P1 hand."""
             cards: List[str] = []
             for i in range(SLOTS):
-                x0 = int(CHOICE_SHIFT_PCT * i * w)
+                x0 = int((HAND_SLOT_START_PCT + CHOICE_SHIFT_PCT * i) * w)
                 x1 = int(x0 + SLOT_WIDTH_PCT * w)
                 roi = frame[y0:y1, x0:x1]
-                cards.append(self._detect_card_in_roi(roi))
+                cards.append(self._detect_card_in_roi(roi, hand=True))
             return cards
 
         def scan_don(
@@ -490,7 +493,7 @@ if __name__ == "__main__":
         while True:
             frame = vision.grab()
             obs = vision.scan()
-            print(obs)
+            pprint(obs)
             cv2.imshow("OPTCGSim vision test", frame)
             cv2.waitKey(0)
     finally:
