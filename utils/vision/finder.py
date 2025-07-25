@@ -10,6 +10,7 @@ Changes in this version
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from pprint import pprint
@@ -121,6 +122,31 @@ def _load_card_from_disk(code: str) -> np.ndarray:
 Match = Tuple[Tuple[int, int], Tuple[int, int], float]  # (top-left), (w,h), score
 
 
+@dataclass
+class OPTCGObs:
+    can_attack: bool
+    can_blocker: bool
+    can_choose_from_top: bool
+    can_choose_friendly_target: bool
+    can_choose_enemy_target: bool
+    can_deploy: bool
+    can_draw: bool
+    can_end_turn: bool
+    can_resolve: bool
+    can_return_cards: bool
+    choice_cards: List[str]
+    hand_p1: List[str]
+    hand_p2: List[str]
+    board_p1: List[str]
+    board_p2: List[str]
+    rested_cards_p1: List[int]
+    rested_cards_p2: List[int]
+    num_active_don_p1: int
+    num_active_don_p2: int
+    num_life_p1: int
+    num_life_p2: int
+
+
 class OPTCGVision:
     """
     Loads & caches templates and provides a :pyfunc:`find` helper.
@@ -156,7 +182,7 @@ class OPTCGVision:
                 self._static[key_lc] = img
 
     def _show_debug(self, roi: np.ndarray):
-        cv2.imshow('debug', roi)
+        cv2.imshow("debug", roi)
         cv2.waitKey()
 
     # ------------------------------------------------------------------ #
@@ -183,7 +209,11 @@ class OPTCGVision:
         key_lc = key.lower()
         if key_lc in self._static:
             if key_lc in self._hand_templates:
-                return self._hand_templates[key_lc] if hand else self._board_templates[key_lc]
+                return (
+                    self._hand_templates[key_lc]
+                    if hand
+                    else self._board_templates[key_lc]
+                )
             return self._static[key_lc]
         return _load_card_from_disk(key)
 
@@ -240,7 +270,7 @@ class OPTCGVision:
 
         return "", False
 
-    def scan(self) -> Dict[str, Any]:
+    def scan(self) -> OPTCGObs:
         """Capture a frame and return high-level observations.
 
         The function scans player hands, board slots and other button cues.
@@ -257,7 +287,9 @@ class OPTCGVision:
         btn_x0, btn_x1 = int(0.70 * w), w
         button_area = frame[btn_y0:btn_y1, btn_x0:btn_x1]
         buttons = {name: self.find(name, frame=button_area) for name in UNSCALED}
-        can_choose_from_top = bool(buttons.get("choose_0_targets")) or bool(buttons.get("choose_-1_targets"))
+        can_choose_from_top = bool(buttons.get("choose_0_targets")) or bool(
+            buttons.get("choose_-1_targets")
+        )
         can_draw = bool(buttons.get("dont_draw_any"))
 
         # 2. Constants -------------------------------------------------------
@@ -267,6 +299,7 @@ class OPTCGVision:
         HAND_SCAN_X0 = 0.0
         HAND_SCAN_X1 = 0.25
         HAND_SLOT_START_PCT = 0.02
+        HAND_MAX_SIZE = 10
         CHOICE_SHIFT_PCT = 0.05
         BOARD_WIDTH_PCT, BOARD_STEP_PCT = 0.10, 0.06
         BOARD_P1_START_X, BOARD_P1_Y = 0.40, 0.6
@@ -275,8 +308,18 @@ class OPTCGVision:
         DON_P1_START_X, DON_P1_END_X, DON_P1_Y = 0.35, 0.6, 0.90
         DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.65, 0.4, 0.15
         DON_HEIGHT_PCT = 0.20
-        LIFE_P1_X0_PCT, LIFE_P1_Y0_PCT, LIFE_P1_X1_PCT, LIFE_P1_Y1_PCT = 0.30, 0.55, 0.40, 0.80
-        LIFE_P2_X0_PCT, LIFE_P2_Y0_PCT, LIFE_P2_X1_PCT, LIFE_P2_Y1_PCT = 0.60, 0.20, 0.70, 0.45
+        LIFE_P1_X0_PCT, LIFE_P1_Y0_PCT, LIFE_P1_X1_PCT, LIFE_P1_Y1_PCT = (
+            0.30,
+            0.55,
+            0.40,
+            0.80,
+        )
+        LIFE_P2_X0_PCT, LIFE_P2_Y0_PCT, LIFE_P2_X1_PCT, LIFE_P2_Y1_PCT = (
+            0.60,
+            0.20,
+            0.70,
+            0.45,
+        )
         LIFE_SCAN_PCT = 0.10
 
         def count_life_cards(
@@ -327,6 +370,7 @@ class OPTCGVision:
                 x1 = int(x0 + SLOT_WIDTH_PCT * w)
                 roi = frame[y0:y1, x0:x1]
                 cards.append(self._detect_card_in_roi(roi, hand=True))
+            cards += [''] * (HAND_MAX_SIZE - len(cards))
             return cards
 
         def scan_board(
@@ -408,29 +452,29 @@ class OPTCGVision:
             choice_cards = scan_choices(choice_y0, choice_y1)
 
         # 6. Pack observations ----------------------------------------------
-        obs: Dict[str, Any] = {
-            "can_attack": bool(buttons.get("attack")),
-            "can_blocker": bool(buttons.get("no_blocker")),
-            "can_choose_from_top": can_choose_from_top,
-            "can_choose_friendly_target": bool(buttons.get("choose_0_friendly_targets")) or bool(buttons.get("select_character_to_replace")),
-            "can_choose_enemy_target": bool(buttons.get("select_target")),
-            "can_deploy": bool(buttons.get("deploy")),
-            "can_draw": can_draw,
-            "can_end_turn": bool(buttons.get("end_turn")),
-            "can_resolve": bool(buttons.get("resolve_attack")),
-            "can_return_cards": bool(buttons.get("return_cards_to_deck")),
-            "hand_p1": hand_p1,
-            "hand_p2": hand_p2,
-            "board_p1": board_p1,
-            "board_p2": board_p2,
-            "rested_cards_p1": rested_p1,
-            "rested_cards_p2": rested_p2,
-            "num_active_don_p1": num_active_don_p1,
-            "num_active_don_p2": num_active_don_p2,
-            "num_life_p1": num_life_p1,
-            "num_life_p2": num_life_p2,
-            "choice_cards": choice_cards,
-        }
+        obs = OPTCGObs(
+            can_attack = bool(buttons.get("attack")),
+            can_blocker = bool(buttons.get("no_blocker")),
+            can_choose_from_top = can_choose_from_top,
+            can_choose_friendly_target = bool(buttons.get("choose_0_friendly_targets")) or bool(buttons.get("select_character_to_replace")),
+            can_choose_enemy_target = bool(buttons.get("select_target")),
+            can_deploy = bool(buttons.get("deploy")),
+            can_draw = can_draw,
+            can_end_turn = bool(buttons.get("end_turn")),
+            can_resolve = bool(buttons.get("resolve_attack")),
+            can_return_cards = bool(buttons.get("return_cards_to_deck")),
+            hand_p1 = hand_p1,
+            hand_p2 = hand_p2,
+            board_p1 = board_p1,
+            board_p2 = board_p2,
+            rested_cards_p1 = rested_p1,
+            rested_cards_p2 = rested_p2,
+            num_active_don_p1 = num_active_don_p1,
+            num_active_don_p2 = num_active_don_p2,
+            num_life_p1 = num_life_p1,
+            num_life_p2 = num_life_p2,
+            choice_cards = choice_cards,
+        )
 
         return obs
 
