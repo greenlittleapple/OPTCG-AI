@@ -119,6 +119,12 @@ class OPTCGEnv(AECEnv):
         self.agent_selection = self.agents[0]
         self._last_obs = {self.agents[0]: self.scan_and_process()}
 
+    def switch_player(self) -> None:
+        """Toggle :attr:`agent_selection` between ``player_0`` and ``player_1``."""
+        self.agent_selection = (
+            "player_1" if self.agent_selection == "player_0" else "player_0"
+        )
+
     def step(self, action: int, debug: bool = False) -> None:
         """Execute *action* and update environment state."""
         if self.terminations[self.agent_selection] or self.truncations[self.agent_selection]:
@@ -183,7 +189,7 @@ def main(num_steps: int = 10) -> None:
             return
 
     # Switch to Player 2
-    env.agent_selection = "player_1"
+    env.switch_player()
     for i in range(4):
         action = env.action_spaces[env.agent_selection].sample()
         env.step(action)
@@ -196,7 +202,7 @@ def main(num_steps: int = 10) -> None:
             return
 
     # Switch back to Player 1 for a final action
-    env.agent_selection = "player_0"
+    env.switch_player()
     action = env.action_spaces[env.agent_selection].sample()
     env.step(action)
     obs, reward, terminated, truncated, _ = env.last()
