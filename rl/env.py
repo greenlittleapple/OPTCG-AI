@@ -81,6 +81,8 @@ class OPTCGEnv(AECEnv):
                 GUI.click_action0()
                 continue
             proceed = True
+
+        acting_player = 0 if self.agent_selection == "player_0" else 1
         return OPTCGPlayerObs(
             can_attack=obs.can_attack,
             can_blocker=obs.can_blocker,
@@ -92,15 +94,15 @@ class OPTCGEnv(AECEnv):
             can_end_turn=obs.can_end_turn,
             can_resolve=obs.can_resolve,
             choice_cards=obs.choice_cards,
-            hand=obs.hand_p1,
-            board=obs.board_p1,
-            board_opponent=obs.board_p2,
-            rested_cards=obs.rested_cards_p1,
-            rested_cards_opponent=obs.rested_cards_p2,
-            num_active_don=obs.num_active_don_p1,
-            num_active_don_opponent=obs.num_active_don_p2,
-            num_life=obs.num_life_p1,
-            num_life_opponent=obs.num_life_p2,
+            hand=obs.hand_p1 if acting_player == 0 else obs.hand_p2,
+            board=obs.board_p1 if acting_player == 0 else obs.board_p2,
+            board_opponent=obs.board_p2 if acting_player == 0 else obs.board_p1,
+            rested_cards=obs.rested_cards_p1 if acting_player == 0 else obs.rested_cards_p2,
+            rested_cards_opponent=obs.rested_cards_p2 if acting_player == 0 else obs.rested_cards_p1,
+            num_active_don=obs.num_active_don_p1 if acting_player == 0 else obs.num_active_don_p2,
+            num_active_don_opponent=obs.num_active_don_p2 if acting_player == 0 else obs.num_active_don_p1,
+            num_life=obs.num_life_p1 if acting_player == 0 else obs.num_life_p2,
+            num_life_opponent=obs.num_life_p2 if acting_player == 0 else obs.num_life_p1,
         )
 
     # ------------------------------------------------------------------
@@ -125,7 +127,12 @@ class OPTCGEnv(AECEnv):
 
         self._clear_rewards()
 
-        # action goes here
+        if self.agent_selection == "player_0":
+            # Player 0 action logic
+            pass
+        else:
+            # Player 1 action logic
+            pass
         time.sleep(self._delay)
 
         obs = self.scan_and_process()
