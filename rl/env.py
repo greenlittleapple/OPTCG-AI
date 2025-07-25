@@ -125,7 +125,7 @@ class OPTCGEnv(AECEnv):
             "player_1" if self.agent_selection == "player_0" else "player_0"
         )
 
-    def step(self, action: int, debug: bool = False) -> None:
+    def step(self, action: int, debug: bool = True) -> None:
         """Execute *action* and update environment state."""
         if self.terminations[self.agent_selection] or self.truncations[self.agent_selection]:
             self._was_dead_step(action)
