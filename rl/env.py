@@ -47,7 +47,7 @@ class OPTCGEnv(AECEnv):
         self._delay = step_delay
         self._steps = 0
 
-        self.possible_agents = ["player_0"]
+        self.possible_agents = ["player_0", "player_1"]
         self.agents: List[str] = []
 
         self.action_spaces = {agent: spaces.Discrete(3) for agent in self.possible_agents}
@@ -55,8 +55,24 @@ class OPTCGEnv(AECEnv):
             agent: spaces.Dict(
                 {
                     "can_attack": spaces.Discrete(2),
-                    "can_resolve": spaces.Discrete(2),
+                    "can_blocker": spaces.Discrete(2),
+                    "can_choose_from_top": spaces.Discrete(2),
+                    "can_choose_friendly_target": spaces.Discrete(2),
+                    "can_choose_enemy_target": spaces.Discrete(2),
+                    "can_deploy": spaces.Discrete(2),
+                    "can_draw": spaces.Discrete(2),
                     "can_end_turn": spaces.Discrete(2),
+                    "can_resolve": spaces.Discrete(2),
+                    "choice_cards": spaces.Sequence(spaces.Text()),
+                    "hand": spaces.Sequence(spaces.Text()),
+                    "board": spaces.Sequence(spaces.Text()),
+                    "board_opponent": spaces.Sequence(spaces.Text()),
+                    "rested_cards": spaces.Sequence(spaces.Discrete(99)),
+                    "rested_cards_opponent": spaces.Sequence(spaces.Discrete(99)),
+                    "num_active_don": spaces.Discrete(11),
+                    "num_active_don_opponent": spaces.Discrete(11),
+                    "num_life": spaces.Discrete(11),
+                    "num_life_opponent": spaces.Discrete(11),
                 }
             )
             for agent in self.possible_agents
