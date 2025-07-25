@@ -59,7 +59,8 @@ class DQNAgent:
         self.hooks = hooks or []
 
         obs_dim = 3
-        action_dim = self.env.action_space.n if self.env.action_space is not None else 3
+        agent_name = self.env.possible_agents[0]
+        action_dim = self.env.action_spaces[agent_name].n
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.policy_net = QNetwork(obs_dim, action_dim).to(self.device)
@@ -83,9 +84,8 @@ class DQNAgent:
 
     def _select_action(self, obs: Dict[str, Any], training: bool = True) -> int:
         if training and random.random() < self.epsilon:
-            if self.env.action_space is not None:
-                return int(self.env.action_space.sample())
-            return random.randrange(3)
+            agent_name = self.env.possible_agents[0]
+            return int(self.env.action_spaces[agent_name].sample())
 
         state = torch.from_numpy(self._obs_to_array(obs)).unsqueeze(0).to(self.device)
         with torch.no_grad():
@@ -127,11 +127,13 @@ class DQNAgent:
     # ------------------------------------------------------------------
     def train(self, episodes: int = 100) -> None:
         for ep in range(1, episodes + 1):
-            obs, _ = self.env.reset()
-            done = False
+            self.env.reset()
+            obs, _, terminated, truncated, _ = self.env.last()
+            done = terminated or truncated
             while not done:
                 action = self._select_action(obs)
-                next_obs, reward, terminated, truncated, _ = self.env.step(action)
+                self.env.step(action)
+                next_obs, reward, terminated, truncated, _ = self.env.last()
                 done = terminated or truncated
 
                 self._store(obs, action, reward, next_obs, done)

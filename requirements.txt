@@ -3,3 +3,4 @@ pyautogui>=0.9,<1.0
 pillow>=10.0,<11.0      # Pillow is an indirect dependency used by pyautogui
 gymnasium>=0.28,<1.0
 torch>=2.2,<3.0
+pettingzoo>=1.25,<2.0
