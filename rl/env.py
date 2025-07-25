@@ -166,15 +166,43 @@ def main(num_steps: int = 10) -> None:
     """Run a short random rollout for quick manual testing."""
     env = OPTCGEnv(max_steps=num_steps)
     env.reset()
+
     obs, _, terminated, truncated, _ = env.last()
     print("reset ->", obs)
-    for t in range(num_steps):
+
+    # Player 1 takes five actions
+    for i in range(5):
         action = env.action_spaces[env.agent_selection].sample()
         env.step(action)
         obs, reward, terminated, truncated, _ = env.last()
-        print(f"step {t}: a={action} r={reward} term={terminated} trunc={truncated}")
+        print(
+            f"p1 step {i}: a={action} r={reward} term={terminated} trunc={truncated}"
+        )
         if terminated or truncated:
-            break
+            print("final obs ->", obs)
+            return
+
+    # Switch to Player 2
+    env.agent_selection = "player_1"
+    for i in range(4):
+        action = env.action_spaces[env.agent_selection].sample()
+        env.step(action)
+        obs, reward, terminated, truncated, _ = env.last()
+        print(
+            f"p2 step {i}: a={action} r={reward} term={terminated} trunc={truncated}"
+        )
+        if terminated or truncated:
+            print("final obs ->", obs)
+            return
+
+    # Switch back to Player 1 for a final action
+    env.agent_selection = "player_0"
+    action = env.action_spaces[env.agent_selection].sample()
+    env.step(action)
+    obs, reward, terminated, truncated, _ = env.last()
+    print(
+        f"p1 step 5: a={action} r={reward} term={terminated} trunc={truncated}"
+    )
     print("final obs ->", obs)
 
 
