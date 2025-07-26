@@ -371,6 +371,7 @@ class OPTCGVision:
                 x1 = int(x0 + SLOT_WIDTH_PCT * w)
                 roi = frame[y0:y1, x0:x1]
                 cards.append(self._detect_card_in_roi(roi, hand=True))
+            assert len(cards) <= HAND_MAX_SIZE
             cards += [''] * (HAND_MAX_SIZE - len(cards))
             return cards
 

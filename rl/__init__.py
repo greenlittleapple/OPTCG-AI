@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .agent import DQNAgent, DQNConfig
-from .env import OPTCGEnv
+from .env import OPTCGEnvBase
 
-__all__ = ["DQNAgent", "DQNConfig", "OPTCGEnv"]
+__all__ = ["DQNAgent", "DQNConfig", "OPTCGEnvBase"]
 
