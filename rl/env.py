@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, asdict
+from dataclasses import dataclass, fields
 import time
 from typing import Any, List, get_args, get_origin
 
@@ -37,7 +37,11 @@ class OPTCGPlayerObs:
 class OPTCGEnv(AECEnv):
     """Minimal OPTCGSim environment following the PettingZoo AEC API."""
 
-    metadata = {"name": "optcg_v1"}
+    metadata = {
+        "name": "optcg_v1",
+        "render_mode": None,
+        "is_parallelizable": True,
+    }
 
     @staticmethod
     def _build_obs_space() -> spaces.Dict:
@@ -117,13 +121,19 @@ class OPTCGEnv(AECEnv):
         self.infos = {agent: {} for agent in self.agents}
         self._steps = 0
         self.agent_selection = self.agents[0]
-        self._last_obs = {self.agents[0]: asdict(self.scan_and_process())}
+        self._last_obs = {self.agents[0]: self.scan_and_process()}
 
     def switch_player(self) -> None:
         """Toggle :attr:`agent_selection` between ``player_0`` and ``player_1``."""
         self.agent_selection = (
             "player_1" if self.agent_selection == "player_0" else "player_0"
         )
+
+    def action_mask(self, agent: str | None = None) -> list[int]:
+        if agent is None:
+            agent = self.agent_selection
+        n = self.action_spaces[agent].n
+        return [1] * n
 
     def step(self, action: int, debug: bool = True) -> None:
         """Execute *action* and update environment state."""
@@ -148,7 +158,7 @@ class OPTCGEnv(AECEnv):
 
         obs = self.scan_and_process()
         self.rewards[self.agent_selection] = reward
-        self._last_obs[self.agent_selection] = asdict(obs)
+        self._last_obs[self.agent_selection] = obs
 
         self._steps += 1
         if self._steps >= self._max_steps:
@@ -160,7 +170,7 @@ class OPTCGEnv(AECEnv):
 
         self._accumulate_rewards()
 
-    def last(self) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
+    def last(self) -> tuple[OPTCGPlayerObs, float, bool, bool, dict[str, Any]]:
         """Return observation and info for the current agent."""
         agent = self.agent_selection
         return (
