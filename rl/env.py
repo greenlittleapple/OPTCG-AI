@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from copy import copy
+from dataclasses import asdict, dataclass, fields
 import time
 from typing import Any, List, get_args, get_origin
 
+import numpy as np
 from pettingzoo.utils.env import AECEnv
 from gymnasium import spaces
 
@@ -34,14 +36,38 @@ class OPTCGPlayerObs:
     num_life: int
     num_life_opponent: int
 
+    def values(self):
+        return {
+            "can_attack": int(self.can_attack),
+            "can_blocker": int(self.can_blocker),
+            "can_choose_from_top": int(self.can_choose_from_top),
+            "can_choose_friendly_target": int(self.can_choose_friendly_target),
+            "can_choose_enemy_target": int(self.can_choose_enemy_target),
+            "can_deploy": int(self.can_deploy),
+            "can_draw": int(self.can_draw),
+            "can_end_turn": int(self.can_end_turn),
+            "can_resolve": int(self.can_resolve),
+            "choice_cards": np.array(self.choice_cards),
+            "hand": np.array(self.hand),
+            "board": np.array(self.board),
+            "board_opponent": np.array(self.board_opponent),
+            "rested_cards": np.array(self.rested_cards),
+            "rested_cards_opponent": np.array(self.rested_cards_opponent),
+            "num_active_don": int(self.num_active_don),
+            "num_active_don_opponent": int(self.num_active_don_opponent),
+            "num_life": int(self.num_life),
+            "num_life_opponent": int(self.num_life_opponent),
+        }
+
 class OPTCGEnv(AECEnv):
     """Minimal OPTCGSim environment following the PettingZoo AEC API."""
 
     metadata = {
         "name": "optcg_v1",
-        "render_mode": None,
         "is_parallelizable": True,
     }
+    render_mode = None
+    fake_obs = None
 
     @staticmethod
     def _build_obs_space() -> spaces.Dict:
@@ -50,19 +76,15 @@ class OPTCGEnv(AECEnv):
         for field in fields(OPTCGPlayerObs):
             typ = field.type
             name = field.name
-            if typ is bool:
+            if typ == "bool":
                 space_mapping[name] = spaces.Discrete(2)
-            elif typ is int:
+            elif typ == "int":
                 space_mapping[name] = spaces.Discrete(11)
-            elif get_origin(typ) in (list, List):
-                subtype = get_args(typ)[0]
-                if subtype is str:
-                    space_mapping[name] = spaces.Sequence(spaces.Text(max_length=10))
-                elif subtype is int:
-                    space_mapping[name] = spaces.Sequence(spaces.Discrete(99))
+            elif "List" in str(typ):
+                space_mapping[name] = spaces.Box(shape=(5 if "board" in name or "choice_cards" in name or "rested_cards" in name else 10,), low=0, high=13000, dtype=np.int64)
         return spaces.Dict(space_mapping)
 
-    def __init__(self, max_steps: int = 50, step_delay: float = 0.5) -> None:
+    def __init__(self, max_steps: int = 100, step_delay: float = 0.5) -> None:
         super().__init__()
         # Instantiate the vision helper used for observation gathering
         self._vision = finder.OPTCGVision()
@@ -73,20 +95,38 @@ class OPTCGEnv(AECEnv):
         self.possible_agents = ["player_0", "player_1"]
         self.agents: List[str] = []
 
-        self.action_spaces = {agent: spaces.Discrete(3) for agent in self.possible_agents}
+        self.action_spaces = {agent: spaces.Discrete(25) for agent in self.possible_agents}
         obs_space = self._build_obs_space()
         self.observation_spaces = {agent: obs_space for agent in self.possible_agents}
 
-    def scan_and_process(self) -> OPTCGPlayerObs:
-        proceed = False
-        while not proceed:
-            obs = self._vision.scan()
-            if obs.can_return_cards:
-                GUI.click_action0()
-                continue
-            proceed = True
+    def observe(self, agent: str, fast_mode = True) -> Any:
+        def process_card_names(cards: List[str]) -> list:
+            card_ids = []
+            for card in cards:
+                card_id = int(card[2:].replace('-', '')) if card != '' else 0
+                card_ids.append(card_id)
+            return card_ids
 
-        acting_player = 0 if self.agent_selection == "player_0" else 1
+        if fast_mode and self.fake_obs:
+            obs = copy(self.fake_obs)
+        else:
+            proceed = False
+            while not proceed:
+                obs = self._vision.scan()
+                self.fake_obs = copy(obs)
+                if obs.can_return_cards:
+                    GUI.click_action0()
+                    continue
+                proceed = True
+
+        obs.hand_p1 = process_card_names(obs.hand_p1)
+        obs.hand_p2 = process_card_names(obs.hand_p2)
+        obs.board_p1 = process_card_names(obs.board_p1)
+        obs.board_p2 = process_card_names(obs.board_p2)
+        obs.choice_cards = process_card_names(obs.choice_cards)
+
+        agent_is_p1 = agent == "player_0"
+
         return OPTCGPlayerObs(
             can_attack=obs.can_attack,
             can_blocker=obs.can_blocker,
@@ -98,16 +138,16 @@ class OPTCGEnv(AECEnv):
             can_end_turn=obs.can_end_turn,
             can_resolve=obs.can_resolve,
             choice_cards=obs.choice_cards,
-            hand=obs.hand_p1 if acting_player == 0 else obs.hand_p2,
-            board=obs.board_p1 if acting_player == 0 else obs.board_p2,
-            board_opponent=obs.board_p2 if acting_player == 0 else obs.board_p1,
-            rested_cards=obs.rested_cards_p1 if acting_player == 0 else obs.rested_cards_p2,
-            rested_cards_opponent=obs.rested_cards_p2 if acting_player == 0 else obs.rested_cards_p1,
-            num_active_don=obs.num_active_don_p1 if acting_player == 0 else obs.num_active_don_p2,
-            num_active_don_opponent=obs.num_active_don_p2 if acting_player == 0 else obs.num_active_don_p1,
-            num_life=obs.num_life_p1 if acting_player == 0 else obs.num_life_p2,
-            num_life_opponent=obs.num_life_p2 if acting_player == 0 else obs.num_life_p1,
-        )
+            hand=obs.hand_p1 if agent_is_p1 else obs.hand_p2,
+            board=obs.board_p1 if agent_is_p1 else obs.board_p2,
+            board_opponent=obs.board_p2 if agent_is_p1 else obs.board_p1,
+            rested_cards=obs.rested_cards_p1 if agent_is_p1 else obs.rested_cards_p2,
+            rested_cards_opponent=obs.rested_cards_p2 if agent_is_p1 else obs.rested_cards_p1,
+            num_active_don=obs.num_active_don_p1 if agent_is_p1 else obs.num_active_don_p2,
+            num_active_don_opponent=obs.num_active_don_p2 if agent_is_p1 else obs.num_active_don_p1,
+            num_life=obs.num_life_p1 if agent_is_p1 else obs.num_life_p2,
+            num_life_opponent=obs.num_life_p2 if agent_is_p1 else obs.num_life_p1,
+        ).values()
 
     # ------------------------------------------------------------------
     # Core API
@@ -121,7 +161,7 @@ class OPTCGEnv(AECEnv):
         self.infos = {agent: {} for agent in self.agents}
         self._steps = 0
         self.agent_selection = self.agents[0]
-        self._last_obs = {self.agents[0]: self.scan_and_process()}
+        self._last_obs = {agent: self.observe("player_0") for agent in self.agents}
 
     def switch_player(self) -> None:
         """Toggle :attr:`agent_selection` between ``player_0`` and ``player_1``."""
@@ -135,42 +175,43 @@ class OPTCGEnv(AECEnv):
         n = self.action_spaces[agent].n
         return [1] * n
 
-    def step(self, action: int, debug: bool = True) -> None:
+    def step(self, action: int, debug: bool = False) -> None:
         """Execute *action* and update environment state."""
         if self.terminations[self.agent_selection] or self.truncations[self.agent_selection]:
             self._was_dead_step(action)
             return
 
         self._clear_rewards()
-
         reward = 0.0
-        if self.agent_selection == "player_0":
-            if action == 0:
-                reward = 1.0
-            elif action == 1:
-                reward = -1.0
-        else:
-            if action == 1:
-                reward = 1.0
-            elif action == 0:
-                reward = -1.0
-        time.sleep(self._delay)
+        if action == 20:
+            if self.agent_selection == "player_0":
+                reward = 1
+            else:
+                reward = -1
+        if action == 14:
+            if self.agent_selection == "player_1":
+                reward = 1
+            else:
+                reward = -1
 
-        obs = self.scan_and_process()
         self.rewards[self.agent_selection] = reward
-        self._last_obs[self.agent_selection] = obs
+        self._last_obs["player_0"] = self.observe("player_0")
+        self._last_obs["player_1"] = self.observe("player_1")
 
         self._steps += 1
+        if self._steps % 10 == 0:
+            self.switch_player()
         if self._steps >= self._max_steps:
-            self.truncations[self.agent_selection] = True
+            self.terminations["player_0"] = True
+            self.terminations["player_1"] = True
 
         if debug:
             print(f"--- ACTION: {action}")
-            print(f"--- OBS: {obs}")
+            print(f"--- OBS: {self._last_obs['player_0']}")
 
         self._accumulate_rewards()
 
-    def last(self) -> tuple[OPTCGPlayerObs, float, bool, bool, dict[str, Any]]:
+    def last(self) -> tuple[Any, float, bool, bool, dict[str, Any]]:
         """Return observation and info for the current agent."""
         agent = self.agent_selection
         return (

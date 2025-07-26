@@ -5,6 +5,7 @@ from typing import Any
 
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import VecMonitor
+from stable_baselines3.common.env_checker import check_env
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 from sb3_contrib.common.wrappers import ActionMasker
@@ -13,7 +14,7 @@ from pettingzoo.utils import conversions
 import supersuit as ss
 
 from pettingzoo.utils import BaseWrapper
-from .env import OPTCGEnv, OPTCGPlayerObs
+from env import OPTCGEnv, OPTCGPlayerObs
 
 
 class SB3ActionMaskWrapper(BaseWrapper, gym.Env):
@@ -31,7 +32,7 @@ class SB3ActionMaskWrapper(BaseWrapper, gym.Env):
         next_agent = self.agent_selection
         return (
             self.observe(next_agent),
-            self._cumulative_rewards[current_agent],
+            self.rewards[current_agent],
             self.terminations[current_agent],
             self.truncations[current_agent],
             self.infos[current_agent],
@@ -50,36 +51,36 @@ class SB3ActionMaskWrapper(BaseWrapper, gym.Env):
 class PPOAgent:
     """Minimal PPO agent using Stable-Baselines3."""
 
-    def __init__(self, env: OPTCGEnv, *, verbose: int = 1) -> None:
+    def __init__(self, env: OPTCGEnv, *, verbose: int = 2) -> None:
         env = SB3ActionMaskWrapper(env)
         env.reset()
         env = ActionMasker(env, lambda e: e.action_mask())
+        check_env(env)
 
-        parallel_env = conversions.aec_to_parallel(env)
-        vec_env = ss.pettingzoo_env_to_vec_env_v1(parallel_env)
-        self.vec_env = ss.concat_vec_envs_v1(
-            vec_env, 1, num_cpus=1, base_class="stable_baselines3"
+        self.model = MaskablePPO(
+            "MultiInputPolicy",
+            env,
+            verbose=verbose,
+            tensorboard_log="./logs/",
         )
-        self.vec_env = VecMonitor(self.vec_env)
-        self.model = MaskablePPO(MaskableActorCriticPolicy, self.vec_env, verbose=verbose)
 
     def train(self, timesteps: int = 1_000) -> None:
         """Train the agent for ``timesteps`` steps."""
 
         class TrainLogger(BaseCallback):
-            def _on_step(self) -> bool:
-                for info in self.locals.get("infos", []):
-                    if "episode" in info:
-                        ep = info["episode"]
-                        print(
-                            f"step={self.num_timesteps} episode_reward={ep['r']} length={ep['l']}"
-                        )
-                return True
+            # def _on_step(self) -> bool:
+            #     for info in self.locals.get("infos", []):
+            #         if "episode" in info:
+            #             ep = info["episode"]
+            #             print(
+            #                 f"step={self.num_timesteps} episode_reward={ep['r']} length={ep['l']}"
+            #             )
+            #     return True
 
             def _on_rollout_end(self) -> None:
                 self.model.logger.dump(self.num_timesteps)
 
-        self.model.learn(total_timesteps=timesteps, callback=TrainLogger())
+        self.model.learn(total_timesteps=timesteps, progress_bar=True)
 
     def act(self, obs: OPTCGPlayerObs | dict[str, Any]) -> int:
         """Return the greedy action for *obs* using the trained policy."""
@@ -89,10 +90,12 @@ class PPOAgent:
         return int(action)
 
 
-def main(timesteps: int = 1_000) -> None:
+def main(timesteps: int = 50000) -> None:
     env = OPTCGEnv()
     agent = PPOAgent(env)
     agent.train(timesteps)
+    print(f'Predicted Action for Player 1: {agent.act(env.observe("player_0"))}')
+    print(f'Predicted Action for Player 2: {agent.act(env.observe("player_1"))}')
 
 
 if __name__ == "__main__":  # pragma: no cover
