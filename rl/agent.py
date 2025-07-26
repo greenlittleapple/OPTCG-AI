@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.vec_env import VecMonitor
 from pettingzoo.utils import conversions
 import supersuit as ss
 
@@ -19,11 +21,26 @@ class PPOAgent:
         self.vec_env = ss.concat_vec_envs_v1(
             vec_env, 1, num_cpus=1, base_class="stable_baselines3"
         )
-        self.model = PPO("MlpPolicy", self.vec_env, verbose=verbose)
+        self.vec_env = VecMonitor(self.vec_env)
+        self.model = PPO("MultiInputPolicy", self.vec_env, verbose=verbose)
 
     def train(self, timesteps: int = 1_000) -> None:
         """Train the agent for ``timesteps`` steps."""
-        self.model.learn(total_timesteps=timesteps)
+
+        class TrainLogger(BaseCallback):
+            def _on_step(self) -> bool:
+                for info in self.locals.get("infos", []):
+                    if "episode" in info:
+                        ep = info["episode"]
+                        print(
+                            f"step={self.num_timesteps} episode_reward={ep['r']} length={ep['l']}"
+                        )
+                return True
+
+            def _on_rollout_end(self) -> None:
+                self.model.logger.dump(self.num_timesteps)
+
+        self.model.learn(total_timesteps=timesteps, callback=TrainLogger())
 
     def act(self, obs: OPTCGPlayerObs) -> int:
         """Return the greedy action for *obs* using the trained policy."""
