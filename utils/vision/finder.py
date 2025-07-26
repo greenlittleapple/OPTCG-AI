@@ -458,7 +458,7 @@ class OPTCGVision:
             text = OPTCGVisionHelper.detect_number(frame)
             if text:
                 try:
-                    nums = [int(t) for t in text.replace(',', ' ').split()]
+                    nums = [int(t) for t in text.replace(',', ' ').split() if '+' not in t]
                     if len(nums) >= 2:
                         attack_powers = nums[:2]
                 except ValueError:

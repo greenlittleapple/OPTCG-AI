@@ -227,7 +227,7 @@ class OPTCGVisionHelper:
         )
 
         # --- 5. OCR -----------------------------------------------------------
-        config = "--psm 6 --oem 1 -c tessedit_char_whitelist=GlOIS0123456789"
+        config = "--psm 6 --oem 1 -c tessedit_char_whitelist=GlOIS0123456789+"
         text: str = pytesseract.image_to_string(mask_clean, config=config).strip()
 
         # -- 6. Replace letters with numbers
