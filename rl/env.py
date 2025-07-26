@@ -274,8 +274,8 @@ class OPTCGEnv(OPTCGEnvBase, gym.Env):
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         super().reset(seed=seed, options=options)
-        self.observation_space = super().observation_space(self.possible_agents[0])
-        self.action_space = super().action_space(self.possible_agents[0])
+        self.observation_space = super().observation_space(self.possible_agents[0]) # type: ignore
+        self.action_space = super().action_space(self.possible_agents[0]) # type: ignore
         return self.observe(self.agent_selection), {}
 
     def step(self, action: int):

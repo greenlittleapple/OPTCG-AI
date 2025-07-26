@@ -16,7 +16,7 @@ class PPOAgent:
 
     def __init__(self, env: OPTCGEnv, *, verbose: int = 2) -> None:
         env.reset()
-        env = ActionMasker(env, lambda e: e.action_mask())
+        env = ActionMasker(env, lambda e: e.action_mask()) # type: ignore
         check_env(env)
 
         self.model = MaskablePPO(
