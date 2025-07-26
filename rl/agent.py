@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Any
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
@@ -42,9 +43,11 @@ class PPOAgent:
 
         self.model.learn(total_timesteps=timesteps, callback=TrainLogger())
 
-    def act(self, obs: OPTCGPlayerObs) -> int:
+    def act(self, obs: OPTCGPlayerObs | dict[str, Any]) -> int:
         """Return the greedy action for *obs* using the trained policy."""
-        action, _ = self.model.predict(asdict(obs), deterministic=True)
+        if not isinstance(obs, dict):
+            obs = asdict(obs)
+        action, _ = self.model.predict(obs, deterministic=True)
         return int(action)
 
 

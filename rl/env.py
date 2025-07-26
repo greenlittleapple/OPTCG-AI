@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, asdict
 import time
 from typing import Any, List, get_args, get_origin
 
@@ -117,7 +117,7 @@ class OPTCGEnv(AECEnv):
         self.infos = {agent: {} for agent in self.agents}
         self._steps = 0
         self.agent_selection = self.agents[0]
-        self._last_obs = {self.agents[0]: self.scan_and_process()}
+        self._last_obs = {self.agents[0]: asdict(self.scan_and_process())}
 
     def switch_player(self) -> None:
         """Toggle :attr:`agent_selection` between ``player_0`` and ``player_1``."""
@@ -148,7 +148,7 @@ class OPTCGEnv(AECEnv):
 
         obs = self.scan_and_process()
         self.rewards[self.agent_selection] = reward
-        self._last_obs[self.agent_selection] = obs
+        self._last_obs[self.agent_selection] = asdict(obs)
 
         self._steps += 1
         if self._steps >= self._max_steps:
@@ -160,7 +160,7 @@ class OPTCGEnv(AECEnv):
 
         self._accumulate_rewards()
 
-    def last(self) -> tuple[OPTCGPlayerObs, float, bool, bool, dict[str, Any]]:
+    def last(self) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
         """Return observation and info for the current agent."""
         agent = self.agent_selection
         return (
