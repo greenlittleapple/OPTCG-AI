@@ -145,6 +145,7 @@ class OPTCGObs:
     num_active_don_p2: int
     num_life_p1: int
     num_life_p2: int
+    attack_powers: List[int]
 
 
 class OPTCGVision:
@@ -451,7 +452,19 @@ class OPTCGVision:
             choice_y0, choice_y1 = int(0.65 * h), int(0.85 * h)
             choice_cards = scan_choices(choice_y0, choice_y1)
 
-        # 6. Pack observations ----------------------------------------------
+        # 6. Attack power numbers -----------------------------------------
+        attack_powers: List[int] = [-1, -1]
+        if buttons.get("resolve_attack"):
+            text = OPTCGVisionHelper.detect_number(frame)
+            if text:
+                try:
+                    nums = [int(t) for t in text.replace(',', ' ').split()]
+                    if len(nums) >= 2:
+                        attack_powers = nums[:2]
+                except ValueError:
+                    pass
+
+        # 7. Pack observations ----------------------------------------------
         obs = OPTCGObs(
             can_attack = bool(buttons.get("attack")),
             can_blocker = bool(buttons.get("no_blocker")),
@@ -474,6 +487,7 @@ class OPTCGVision:
             num_life_p1 = num_life_p1,
             num_life_p2 = num_life_p2,
             choice_cards = choice_cards,
+            attack_powers = attack_powers,
         )
 
         return obs
