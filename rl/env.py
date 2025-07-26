@@ -72,6 +72,8 @@ class OPTCGEnv(AECEnv):
     }
     render_mode = None
     fake_obs = None
+    FAST_MODE = True
+    VERBOSE = True
 
     @staticmethod
     def _build_obs_space() -> spaces.Dict:
@@ -103,7 +105,7 @@ class OPTCGEnv(AECEnv):
         obs_space = self._build_obs_space()
         self.observation_spaces = {agent: obs_space for agent in self.possible_agents}
 
-    def observe(self, agent: str, fast_mode = True) -> Any:
+    def observe(self, agent: str) -> Any:
         def process_card_names(cards: List[str]) -> list:
             card_ids = []
             for card in cards:
@@ -111,7 +113,7 @@ class OPTCGEnv(AECEnv):
                 card_ids.append(card_id)
             return card_ids
 
-        if fast_mode and self.fake_obs:
+        if self.FAST_MODE and self.fake_obs:
             obs = copy(self.fake_obs)
         else:
             proceed = False
@@ -187,10 +189,10 @@ class OPTCGEnv(AECEnv):
     def action_mask(self, agent: str | None = None) -> list[int]:
         if agent is None:
             agent = self.agent_selection
-        n = self.action_spaces[agent].n
+        n = self.action_spaces[agent].__getattribute__("n")
         return [1] * n
 
-    def step(self, action: int, debug: bool = False) -> None:
+    def step(self, action: int) -> None:
         """Execute *action* and update environment state."""
         if self.terminations[self.agent_selection] or self.truncations[self.agent_selection]:
             self._was_dead_step(action)
@@ -220,9 +222,9 @@ class OPTCGEnv(AECEnv):
             self.terminations["player_0"] = True
             self.terminations["player_1"] = True
 
-        if debug:
+        if self.VERBOSE:
             print(f"--- ACTION: {action}")
-            print(f"--- OBS: {self._last_obs['player_0']}")
+            print(f"--- OBS: {self._last_obs[self.agent_selection]}")
 
         self._accumulate_rewards()
 
