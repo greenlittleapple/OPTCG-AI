@@ -35,6 +35,8 @@ class OPTCGPlayerObs:
     num_active_don_opponent: int
     num_life: int
     num_life_opponent: int
+    attack_power: int
+    attack_power_opponent: int
 
     def values(self):
         return {
@@ -57,6 +59,8 @@ class OPTCGPlayerObs:
             "num_active_don_opponent": int(self.num_active_don_opponent),
             "num_life": int(self.num_life),
             "num_life_opponent": int(self.num_life_opponent),
+            "attack_power": int(self.attack_power),
+            "attack_power_opponent": int(self.attack_power_opponent),
         }
 
 class OPTCGEnv(AECEnv):
@@ -127,6 +131,15 @@ class OPTCGEnv(AECEnv):
 
         agent_is_p1 = agent == "player_0"
 
+        raw_power_self = obs.attack_powers[1] if agent_is_p1 else obs.attack_powers[0]
+        raw_power_opp = obs.attack_powers[0] if agent_is_p1 else obs.attack_powers[1]
+
+        def scale_power(val: int) -> int:
+            return val if val == -1 else val // 1000
+
+        attack_power = scale_power(raw_power_self)
+        attack_power_opponent = scale_power(raw_power_opp)
+
         return OPTCGPlayerObs(
             can_attack=obs.can_attack,
             can_blocker=obs.can_blocker,
@@ -147,6 +160,8 @@ class OPTCGEnv(AECEnv):
             num_active_don_opponent=obs.num_active_don_p2 if agent_is_p1 else obs.num_active_don_p1,
             num_life=obs.num_life_p1 if agent_is_p1 else obs.num_life_p2,
             num_life_opponent=obs.num_life_p2 if agent_is_p1 else obs.num_life_p1,
+            attack_power=attack_power,
+            attack_power_opponent=attack_power_opponent,
         ).values()
 
     # ------------------------------------------------------------------
