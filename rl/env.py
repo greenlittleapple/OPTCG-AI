@@ -3,16 +3,16 @@ from __future__ import annotations
 
 from copy import copy
 from dataclasses import asdict, dataclass, fields
-import time
-from typing import Any, List, get_args, get_origin
+from typing import Any, List
 
 import numpy as np
 from pettingzoo.utils.env import AECEnv
 from gymnasium import spaces
 
-from utils.gui import gui_macros as MACROS
+import gymnasium as gym
 from utils.gui import gui_automation_starter as GUI
 from utils.vision import finder
+
 
 @dataclass
 class OPTCGPlayerObs:
@@ -35,6 +35,8 @@ class OPTCGPlayerObs:
     num_active_don_opponent: int
     num_life: int
     num_life_opponent: int
+    attack_power: int
+    attack_power_opponent: int
 
     def values(self):
         return {
@@ -57,9 +59,12 @@ class OPTCGPlayerObs:
             "num_active_don_opponent": int(self.num_active_don_opponent),
             "num_life": int(self.num_life),
             "num_life_opponent": int(self.num_life_opponent),
+            "attack_power": int(self.attack_power),
+            "attack_power_opponent": int(self.attack_power_opponent),
         }
 
-class OPTCGEnv(AECEnv):
+
+class OPTCGEnvBase(AECEnv):
     """Minimal OPTCGSim environment following the PettingZoo AEC API."""
 
     metadata = {
@@ -68,6 +73,10 @@ class OPTCGEnv(AECEnv):
     }
     render_mode = None
     fake_obs = None
+    FAST_MODE = True
+    VERBOSE = False
+    P1 = "player_0"
+    P2 = "player_1"
 
     @staticmethod
     def _build_obs_space() -> spaces.Dict:
@@ -81,7 +90,20 @@ class OPTCGEnv(AECEnv):
             elif typ == "int":
                 space_mapping[name] = spaces.Discrete(11)
             elif "List" in str(typ):
-                space_mapping[name] = spaces.Box(shape=(5 if "board" in name or "choice_cards" in name or "rested_cards" in name else 10,), low=0, high=13000, dtype=np.int64)
+                space_mapping[name] = spaces.Box(
+                    shape=(
+                        (
+                            5
+                            if "board" in name
+                            or "choice_cards" in name
+                            or "rested_cards" in name
+                            else 10
+                        ),
+                    ),
+                    low=0,
+                    high=13000,
+                    dtype=np.int64,
+                )
         return spaces.Dict(space_mapping)
 
     def __init__(self, max_steps: int = 100, step_delay: float = 0.5) -> None:
@@ -95,19 +117,21 @@ class OPTCGEnv(AECEnv):
         self.possible_agents = ["player_0", "player_1"]
         self.agents: List[str] = []
 
-        self.action_spaces = {agent: spaces.Discrete(25) for agent in self.possible_agents}
+        self.action_spaces = {
+            agent: spaces.Discrete(25) for agent in self.possible_agents
+        }
         obs_space = self._build_obs_space()
         self.observation_spaces = {agent: obs_space for agent in self.possible_agents}
 
-    def observe(self, agent: str, fast_mode = True) -> Any:
+    def observe(self, agent: str) -> Any:
         def process_card_names(cards: List[str]) -> list:
             card_ids = []
             for card in cards:
-                card_id = int(card[2:].replace('-', '')) if card != '' else 0
+                card_id = int(card[2:].replace("-", "")) if card != "" else 0
                 card_ids.append(card_id)
             return card_ids
 
-        if fast_mode and self.fake_obs:
+        if self.FAST_MODE and self.fake_obs:
             obs = copy(self.fake_obs)
         else:
             proceed = False
@@ -127,6 +151,15 @@ class OPTCGEnv(AECEnv):
 
         agent_is_p1 = agent == "player_0"
 
+        raw_power_self = obs.attack_powers[1] if agent_is_p1 else obs.attack_powers[0]
+        raw_power_opp = obs.attack_powers[0] if agent_is_p1 else obs.attack_powers[1]
+
+        def scale_power(val: int) -> int:
+            return val if val == -1 else val // 1000
+
+        attack_power = scale_power(raw_power_self)
+        attack_power_opponent = scale_power(raw_power_opp)
+
         return OPTCGPlayerObs(
             can_attack=obs.can_attack,
             can_blocker=obs.can_blocker,
@@ -142,17 +175,27 @@ class OPTCGEnv(AECEnv):
             board=obs.board_p1 if agent_is_p1 else obs.board_p2,
             board_opponent=obs.board_p2 if agent_is_p1 else obs.board_p1,
             rested_cards=obs.rested_cards_p1 if agent_is_p1 else obs.rested_cards_p2,
-            rested_cards_opponent=obs.rested_cards_p2 if agent_is_p1 else obs.rested_cards_p1,
-            num_active_don=obs.num_active_don_p1 if agent_is_p1 else obs.num_active_don_p2,
-            num_active_don_opponent=obs.num_active_don_p2 if agent_is_p1 else obs.num_active_don_p1,
+            rested_cards_opponent=(
+                obs.rested_cards_p2 if agent_is_p1 else obs.rested_cards_p1
+            ),
+            num_active_don=(
+                obs.num_active_don_p1 if agent_is_p1 else obs.num_active_don_p2
+            ),
+            num_active_don_opponent=(
+                obs.num_active_don_p2 if agent_is_p1 else obs.num_active_don_p1
+            ),
             num_life=obs.num_life_p1 if agent_is_p1 else obs.num_life_p2,
             num_life_opponent=obs.num_life_p2 if agent_is_p1 else obs.num_life_p1,
+            attack_power=attack_power,
+            attack_power_opponent=attack_power_opponent,
         ).values()
 
     # ------------------------------------------------------------------
     # Core API
     # ------------------------------------------------------------------
-    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> None:
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> None:
         self.agents = self.possible_agents[:]
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
@@ -172,12 +215,15 @@ class OPTCGEnv(AECEnv):
     def action_mask(self, agent: str | None = None) -> list[int]:
         if agent is None:
             agent = self.agent_selection
-        n = self.action_spaces[agent].n
+        n = self.action_spaces[agent].__getattribute__("n")
         return [1] * n
 
-    def step(self, action: int, debug: bool = False) -> None:
+    def step(self, action: int) -> None:
         """Execute *action* and update environment state."""
-        if self.terminations[self.agent_selection] or self.truncations[self.agent_selection]:
+        if (
+            self.terminations[self.agent_selection]
+            or self.truncations[self.agent_selection]
+        ):
             self._was_dead_step(action)
             return
 
@@ -205,9 +251,9 @@ class OPTCGEnv(AECEnv):
             self.terminations["player_0"] = True
             self.terminations["player_1"] = True
 
-        if debug:
+        if self.VERBOSE:
             print(f"--- ACTION: {action}")
-            print(f"--- OBS: {self._last_obs['player_0']}")
+            print(f"--- OBS: {self._last_obs[self.agent_selection]}")
 
         self._accumulate_rewards()
 
@@ -223,22 +269,50 @@ class OPTCGEnv(AECEnv):
         )
 
 
+class OPTCGEnv(OPTCGEnvBase, gym.Env):
+    """Wrapper to adapt PettingZoo AEC environments for SB3 with action masking."""
+
+    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
+        super().reset(seed=seed, options=options)
+        self.observation_space = super().observation_space(self.possible_agents[0])
+        self.action_space = super().action_space(self.possible_agents[0])
+        return self.observe(self.agent_selection), {}
+
+    def step(self, action: int):
+        current_agent = self.agent_selection
+        super().step(action)
+        next_agent = self.agent_selection
+        return (
+            self.observe(next_agent),
+            self.rewards[current_agent],
+            self.terminations[current_agent],
+            self.truncations[current_agent],
+            self.infos[current_agent],
+        )
+
+    def observe(self, agent: str):
+        obs = super().observe(agent)
+        if isinstance(obs, OPTCGPlayerObs):
+            return asdict(obs)
+        return obs
+
+    def action_mask(self):
+        return super().action_mask(self.agent_selection)
+
+
 def main(num_steps: int = 10) -> None:
     """Run a short random rollout for quick manual testing."""
     env = OPTCGEnv(max_steps=num_steps)
     env.reset()
 
-    obs, _, terminated, truncated, _ = env.last()
+    obs = env.observe(env.P1)
     print("reset ->", obs)
 
     # Player 1 takes five actions
     for i in range(5):
         action = env.action_spaces[env.agent_selection].sample()
-        env.step(action)
-        obs, reward, terminated, truncated, _ = env.last()
-        print(
-            f"p1 step {i}: a={action} r={reward} term={terminated} trunc={truncated}"
-        )
+        obs, reward, terminated, truncated, _ = env.step(action)
+        print(f"p1 step {i}: a={action} r={reward} term={terminated} trunc={truncated}")
         if terminated or truncated:
             print("final obs ->", obs)
             return
@@ -247,11 +321,8 @@ def main(num_steps: int = 10) -> None:
     env.switch_player()
     for i in range(4):
         action = env.action_spaces[env.agent_selection].sample()
-        env.step(action)
-        obs, reward, terminated, truncated, _ = env.last()
-        print(
-            f"p2 step {i}: a={action} r={reward} term={terminated} trunc={truncated}"
-        )
+        obs, reward, terminated, truncated, _ = env.step(action)
+        print(f"p2 step {i}: a={action} r={reward} term={terminated} trunc={truncated}")
         if terminated or truncated:
             print("final obs ->", obs)
             return
@@ -259,11 +330,8 @@ def main(num_steps: int = 10) -> None:
     # Switch back to Player 1 for a final action
     env.switch_player()
     action = env.action_spaces[env.agent_selection].sample()
-    env.step(action)
-    obs, reward, terminated, truncated, _ = env.last()
-    print(
-        f"p1 step 5: a={action} r={reward} term={terminated} trunc={truncated}"
-    )
+    obs, reward, terminated, truncated, _ = env.step(action)
+    print(f"p1 step 5: a={action} r={reward} term={terminated} trunc={truncated}")
     print("final obs ->", obs)
 
 

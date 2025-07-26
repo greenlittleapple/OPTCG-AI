@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from rl.agent import PPOAgent
-from rl.env import OPTCGEnv
+from rl.env import OPTCGEnvBase
 
-__all__ = ["PPOAgent", "OPTCGEnv"]
+__all__ = ["PPOAgent", "OPTCGEnvBase"]
 
