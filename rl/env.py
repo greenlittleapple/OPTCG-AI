@@ -78,9 +78,14 @@ class OPTCGEnvBase(AECEnv):
     P1 = "player_0"
     P2 = "player_1"
 
-    INTENT_ATTACH_DON = 0
-    INTENT_ATTACK = 1
-    INTENTS = ["attach_don", "attack"]
+    INTENT_END_TURN = 0
+    INTENT_ATTACH_DON = 1
+    INTENT_ATTACK = 2
+    INTENTS = ["end_turn", "attach_don", "attack"]
+
+    MAX_ATTACH_DON = 10
+    MAX_ATTACK_TARGET = 5
+    TOTAL_ACTIONS = 1 + MAX_ATTACH_DON + (MAX_ATTACK_TARGET + 1)
 
     @staticmethod
     def _build_obs_space() -> spaces.Dict:
@@ -89,10 +94,10 @@ class OPTCGEnvBase(AECEnv):
         for field in fields(OPTCGPlayerObs):
             typ = field.type
             name = field.name
-            if typ == "bool":
+            if typ is bool:
                 space_mapping[name] = spaces.Discrete(2)
-            elif typ == "int":
-                space_mapping[name] = spaces.Discrete(11)
+            elif typ is int:
+                space_mapping[name] = spaces.Discrete(100)
             elif "List" in str(typ):
                 space_mapping[name] = spaces.Box(
                     shape=(
@@ -111,25 +116,16 @@ class OPTCGEnvBase(AECEnv):
         space_mapping["action_mask"] = spaces.Dict(
             {
                 "intent": spaces.MultiBinary(len(OPTCGEnvBase.INTENTS)),
-                "attach_don_count": spaces.MultiBinary(10),
-                "attack_target": spaces.MultiBinary(6),
+                "attach_don_count": spaces.MultiBinary(OPTCGEnvBase.MAX_ATTACH_DON),
+                "attack_target": spaces.MultiBinary(OPTCGEnvBase.MAX_ATTACK_TARGET + 1),
+                "flat": spaces.MultiBinary(OPTCGEnvBase.TOTAL_ACTIONS),
             }
         )
         return spaces.Dict(space_mapping)
 
     @staticmethod
-    def _build_action_space() -> spaces.Dict:
-        return spaces.Dict(
-            {
-                "intent": spaces.Discrete(len(OPTCGEnvBase.INTENTS)),
-                "attach_don_count": spaces.Box(
-                    low=1, high=10, shape=(1,), dtype=np.int64
-                ),
-                "attack_target": spaces.Box(
-                    low=0, high=5, shape=(1,), dtype=np.int64
-                ),
-            }
-        )
+    def _build_action_space() -> spaces.Discrete:
+        return spaces.Discrete(OPTCGEnvBase.TOTAL_ACTIONS)
 
     def __init__(self, max_steps: int = 100, step_delay: float = 0.5) -> None:
         super().__init__()
@@ -180,7 +176,9 @@ class OPTCGEnvBase(AECEnv):
         raw_power_opp = obs.attack_powers[0] if agent_is_p1 else obs.attack_powers[1]
 
         def scale_power(val: int) -> int:
-            return val if val == -1 else val // 1000
+            if val == -1:
+                return 99
+            return val // 1000
 
         attack_power = scale_power(raw_power_self)
         attack_power_opponent = scale_power(raw_power_opp)
@@ -241,18 +239,35 @@ class OPTCGEnvBase(AECEnv):
 
     def create_action_mask(self, obs: dict[str, Any]) -> dict[str, list[int]]:
         num_don = int(obs.get("num_active_don", 0))
-        attach_mask = [1 if i <= num_don else 0 for i in range(1, 11)]
+        can_attack = bool(obs.get("can_attack", 0))
 
-        rested = obs.get("rested_cards_opponent", [0] * 5)
-        attack_target_mask = [1] + [int(v) for v in list(rested)[:5]]
+        attach_mask = [1 if i <= num_don else 0 for i in range(1, self.MAX_ATTACH_DON + 1)]
+
+        if can_attack:
+            rested = list(obs.get("rested_cards_opponent", [0] * self.MAX_ATTACK_TARGET))
+            attack_target_mask = [1] + [int(v) for v in rested[: self.MAX_ATTACK_TARGET]]
+        else:
+            attack_target_mask = [0] * (self.MAX_ATTACK_TARGET + 1)
+
+        intents_mask = [
+            1,  # end_turn always available
+            1 if num_don > 0 else 0,
+            1 if can_attack else 0,
+        ]
+
+        flat_mask: list[int] = []
+        flat_mask.append(intents_mask[0])
+        flat_mask.extend([intents_mask[1] * v for v in attach_mask])
+        flat_mask.extend([intents_mask[2] * v for v in attack_target_mask])
 
         return {
-            "intent": [1 for _ in range(len(self.INTENTS))],
+            "intent": intents_mask,
             "attach_don_count": attach_mask,
             "attack_target": attack_target_mask,
+            "flat": flat_mask,
         }
 
-    def step(self, action: dict[str, Any]) -> None:
+    def step(self, action: int) -> None:
         """Execute *action* and update environment state."""
         if (
             self.terminations[self.agent_selection]
@@ -264,17 +279,24 @@ class OPTCGEnvBase(AECEnv):
         self._clear_rewards()
         reward = 0.0
 
-        intent = int(action.get("intent", -1))
-        if intent == self.INTENT_ATTACH_DON:
-            count = int(action.get("attach_don_count", -1))
-            if not 1 <= count <= 10:
+        if action == self.INTENT_END_TURN:
+            intent = self.INTENT_END_TURN
+        elif 1 <= action <= self.MAX_ATTACH_DON:
+            intent = self.INTENT_ATTACH_DON
+            count = action
+            if not 1 <= count <= self.MAX_ATTACH_DON:
                 raise ValueError("attach_don_count must be 1-10")
-        elif intent == self.INTENT_ATTACK:
-            target = int(action.get("attack_target", -1))
-            if not 0 <= target <= 5:
+        elif (
+            self.MAX_ATTACH_DON + 1
+            <= action
+            < self.MAX_ATTACH_DON + 1 + self.MAX_ATTACK_TARGET + 1
+        ):
+            intent = self.INTENT_ATTACK
+            target = action - (self.MAX_ATTACH_DON + 1)
+            if not 0 <= target <= self.MAX_ATTACK_TARGET:
                 raise ValueError("attack_target must be 0-5")
         else:
-            raise ValueError("invalid intent")
+            raise ValueError("invalid action")
 
         self.rewards[self.agent_selection] = reward
         self._last_obs["player_0"] = self.observe("player_0")
@@ -314,7 +336,7 @@ class OPTCGEnv(OPTCGEnvBase, gym.Env):
         self.action_space = super().action_space(self.possible_agents[0]) # type: ignore
         return self.observe(self.agent_selection), {}
 
-    def step(self, action: dict[str, Any]):
+    def step(self, action: int):
         current_agent = self.agent_selection
         super().step(action)
         next_agent = self.agent_selection
