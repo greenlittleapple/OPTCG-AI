@@ -214,7 +214,7 @@ class OPTCGEnvBase(AECEnv):
             attack_power=attack_power,
             attack_power_opponent=attack_power_opponent,
         ).values()
-        obs_dict["action_mask"] = self.action_mask(agent)
+        obs_dict["action_mask"] = self.create_action_mask(obs_dict)
         return obs_dict
 
     # ------------------------------------------------------------------
@@ -239,13 +239,17 @@ class OPTCGEnvBase(AECEnv):
             "player_1" if self.agent_selection == "player_0" else "player_0"
         )
 
-    def action_mask(self, agent: str | None = None) -> dict[str, list[int]]:
-        if agent is None:
-            agent = self.agent_selection
+    def create_action_mask(self, obs: dict[str, Any]) -> dict[str, list[int]]:
+        num_don = int(obs.get("num_active_don", 0))
+        attach_mask = [1 if i <= num_don else 0 for i in range(1, 11)]
+
+        rested = obs.get("rested_cards_opponent", [0] * 5)
+        attack_target_mask = [1] + [int(v) for v in list(rested)[:5]]
+
         return {
             "intent": [1 for _ in range(len(self.INTENTS))],
-            "attach_don_count": [1] * 10,
-            "attack_target": [1] * 6,
+            "attach_don_count": attach_mask,
+            "attack_target": attack_target_mask,
         }
 
     def step(self, action: dict[str, Any]) -> None:
@@ -329,7 +333,7 @@ class OPTCGEnv(OPTCGEnvBase, gym.Env):
         return obs
 
     def action_mask(self):
-        return super().action_mask(self.agent_selection)
+        return super().create_action_mask(self._last_obs[self.agent_selection])
 
 
 def main(num_steps: int = 10) -> None:
