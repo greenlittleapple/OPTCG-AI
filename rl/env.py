@@ -94,9 +94,9 @@ class OPTCGEnvBase(AECEnv):
         for field in fields(OPTCGPlayerObs):
             typ = field.type
             name = field.name
-            if typ is bool:
+            if typ == "bool":
                 space_mapping[name] = spaces.Discrete(2)
-            elif typ is int:
+            elif typ == "int":
                 space_mapping[name] = spaces.Discrete(100)
             elif "List" in str(typ):
                 space_mapping[name] = spaces.Box(
@@ -113,13 +113,8 @@ class OPTCGEnvBase(AECEnv):
                     high=13000,
                     dtype=np.int64,
                 )
-        space_mapping["action_mask"] = spaces.Dict(
-            {
-                "intent": spaces.MultiBinary(len(OPTCGEnvBase.INTENTS)),
-                "attach_don_count": spaces.MultiBinary(OPTCGEnvBase.MAX_ATTACH_DON),
-                "attack_target": spaces.MultiBinary(OPTCGEnvBase.MAX_ATTACK_TARGET + 1),
-                "flat": spaces.MultiBinary(OPTCGEnvBase.TOTAL_ACTIONS),
-            }
+        space_mapping["action_mask"] = spaces.MultiBinary(
+            OPTCGEnvBase.TOTAL_ACTIONS
         )
         return spaces.Dict(space_mapping)
 
@@ -237,7 +232,7 @@ class OPTCGEnvBase(AECEnv):
             "player_1" if self.agent_selection == "player_0" else "player_0"
         )
 
-    def create_action_mask(self, obs: dict[str, Any]) -> dict[str, list[int]]:
+    def create_action_mask(self, obs: dict[str, Any]) -> list[int]:
         num_don = int(obs.get("num_active_don", 0))
         can_attack = bool(obs.get("can_attack", 0))
 
@@ -249,23 +244,10 @@ class OPTCGEnvBase(AECEnv):
         else:
             attack_target_mask = [0] * (self.MAX_ATTACK_TARGET + 1)
 
-        intents_mask = [
-            1,  # end_turn always available
-            1 if num_don > 0 else 0,
-            1 if can_attack else 0,
-        ]
-
-        flat_mask: list[int] = []
-        flat_mask.append(intents_mask[0])
-        flat_mask.extend([intents_mask[1] * v for v in attach_mask])
-        flat_mask.extend([intents_mask[2] * v for v in attack_target_mask])
-
-        return {
-            "intent": intents_mask,
-            "attach_don_count": attach_mask,
-            "attack_target": attack_target_mask,
-            "flat": flat_mask,
-        }
+        mask: list[int] = [1]
+        mask.extend(attach_mask)
+        mask.extend(attack_target_mask)
+        return mask
 
     def step(self, action: int) -> None:
         """Execute *action* and update environment state."""
