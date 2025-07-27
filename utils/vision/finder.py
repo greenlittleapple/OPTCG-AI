@@ -311,6 +311,10 @@ class OPTCGVision:
         DON_P1_START_X, DON_P1_END_X, DON_P1_Y = 0.35, 0.6, 0.90
         DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.65, 0.4, 0.15
         DON_HEIGHT_PCT = 0.20
+        LEADER_P1_X = 0.48
+        LEADER_P1_Y = BOARD_P1_Y
+        LEADER_P2_X = 0.43
+        LEADER_P2_Y = DON_P2_Y
         LIFE_P1_X0_PCT, LIFE_P1_Y0_PCT, LIFE_P1_X1_PCT, LIFE_P1_Y1_PCT = (
             0.30,
             0.55,
@@ -459,8 +463,8 @@ class OPTCGVision:
             DON_P2_START_X, DON_P2_END_X, DON_P2_Y, "DON_side_p2"
         )
 
-        leader_rested_p1 = scan_leader(0.45, BOARD_P1_Y + BOARD_HEIGHT_PCT)
-        leader_rested_p2 = scan_leader(0.35, DON_P2_Y + DON_HEIGHT_PCT)
+        leader_rested_p1 = scan_leader(LEADER_P1_X, LEADER_P1_Y)
+        leader_rested_p2 = scan_leader(LEADER_P2_X, LEADER_P2_Y)
 
         # 5. Choice row ------------------------------------------------------
         choice_cards: List[str] = ["", "", "", "", ""]
