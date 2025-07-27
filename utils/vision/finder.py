@@ -141,6 +141,8 @@ class OPTCGObs:
     board_p2: List[str]
     rested_cards_p1: List[int]
     rested_cards_p2: List[int]
+    leader_rested_p1: bool
+    leader_rested_p2: bool
     num_active_don_p1: int
     num_active_don_p2: int
     num_life_p1: int
@@ -309,6 +311,10 @@ class OPTCGVision:
         DON_P1_START_X, DON_P1_END_X, DON_P1_Y = 0.35, 0.6, 0.90
         DON_P2_START_X, DON_P2_END_X, DON_P2_Y = 0.65, 0.4, 0.15
         DON_HEIGHT_PCT = 0.20
+        LEADER_P1_X = 0.48
+        LEADER_P1_Y = BOARD_P1_Y
+        LEADER_P2_X = 0.43
+        LEADER_P2_Y = DON_P2_Y
         LIFE_P1_X0_PCT, LIFE_P1_Y0_PCT, LIFE_P1_X1_PCT, LIFE_P1_Y1_PCT = (
             0.30,
             0.55,
@@ -414,6 +420,16 @@ class OPTCGVision:
             hits = self.find(template, frame=roi, is_card=True)
             return min(len(hits), 10)
 
+        def scan_leader(start_x: float, start_y: float) -> bool:
+            """Return True if the leader in the region is rested."""
+            y0 = int(start_y * h)
+            y1 = int(min(start_y + BOARD_HEIGHT_PCT, 1.0) * h)
+            x0 = int(start_x * w)
+            x1 = int((start_x + BOARD_WIDTH_PCT) * w)
+            roi = frame[y0:y1, x0:x1]
+            _, rested = self._detect_card_and_rest(roi)
+            return rested
+
         # 3. Player-1 --------------------------------------------------------
         p1_y0, p1_y1 = int(0.80 * h), h
         p1_count = count_hand_cards(p1_y0, p1_y1)
@@ -446,6 +462,9 @@ class OPTCGVision:
         num_active_don_p2 = scan_don(
             DON_P2_START_X, DON_P2_END_X, DON_P2_Y, "DON_side_p2"
         )
+
+        leader_rested_p1 = scan_leader(LEADER_P1_X, LEADER_P1_Y)
+        leader_rested_p2 = scan_leader(LEADER_P2_X, LEADER_P2_Y)
 
         # 5. Choice row ------------------------------------------------------
         choice_cards: List[str] = ["", "", "", "", ""]
@@ -483,6 +502,8 @@ class OPTCGVision:
             board_p2 = board_p2,
             rested_cards_p1 = rested_p1,
             rested_cards_p2 = rested_p2,
+            leader_rested_p1 = leader_rested_p1,
+            leader_rested_p2 = leader_rested_p2,
             num_active_don_p1 = num_active_don_p1,
             num_active_don_p2 = num_active_don_p2,
             num_life_p1 = num_life_p1,

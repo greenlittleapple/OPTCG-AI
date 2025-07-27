@@ -31,6 +31,8 @@ class OPTCGPlayerObs:
     board_opponent: List[str]
     rested_cards: List[int]
     rested_cards_opponent: List[int]
+    leader_rested: bool
+    leader_rested_opponent: bool
     num_active_don: int
     num_active_don_opponent: int
     num_life: int
@@ -55,6 +57,8 @@ class OPTCGPlayerObs:
             "board_opponent": np.array(self.board_opponent),
             "rested_cards": np.array(self.rested_cards),
             "rested_cards_opponent": np.array(self.rested_cards_opponent),
+            "leader_rested": int(self.leader_rested),
+            "leader_rested_opponent": int(self.leader_rested_opponent),
             "num_active_don": int(self.num_active_don),
             "num_active_don_opponent": int(self.num_active_don_opponent),
             "num_life": int(self.num_life),
@@ -196,6 +200,12 @@ class OPTCGEnvBase(AECEnv):
             rested_cards=obs.rested_cards_p1 if agent_is_p1 else obs.rested_cards_p2,
             rested_cards_opponent=(
                 obs.rested_cards_p2 if agent_is_p1 else obs.rested_cards_p1
+            ),
+            leader_rested=(
+                obs.leader_rested_p1 if agent_is_p1 else obs.leader_rested_p2
+            ),
+            leader_rested_opponent=(
+                obs.leader_rested_p2 if agent_is_p1 else obs.leader_rested_p1
             ),
             num_active_don=(
                 obs.num_active_don_p1 if agent_is_p1 else obs.num_active_don_p2
