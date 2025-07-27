@@ -78,6 +78,15 @@ class OPTCGEnvBase(AECEnv):
     P1 = "player_0"
     P2 = "player_1"
 
+    INTENT_END_TURN = 0
+    INTENT_ATTACH_DON = 1
+    INTENT_ATTACK = 2
+    INTENTS = ["end_turn", "attach_don", "attack"]
+
+    MAX_ATTACH_DON = 10
+    MAX_ATTACK_TARGET = 5
+    TOTAL_ACTIONS = 1 + MAX_ATTACH_DON + (MAX_ATTACK_TARGET + 1)
+
     @staticmethod
     def _build_obs_space() -> spaces.Dict:
         """Generate an observation space based on :class:`OPTCGPlayerObs`."""
@@ -88,7 +97,7 @@ class OPTCGEnvBase(AECEnv):
             if typ == "bool":
                 space_mapping[name] = spaces.Discrete(2)
             elif typ == "int":
-                space_mapping[name] = spaces.Discrete(11)
+                space_mapping[name] = spaces.Discrete(100)
             elif "List" in str(typ):
                 space_mapping[name] = spaces.Box(
                     shape=(
@@ -104,7 +113,14 @@ class OPTCGEnvBase(AECEnv):
                     high=13000,
                     dtype=np.int64,
                 )
+        space_mapping["action_mask"] = spaces.MultiBinary(
+            OPTCGEnvBase.TOTAL_ACTIONS
+        )
         return spaces.Dict(space_mapping)
+
+    @staticmethod
+    def _build_action_space() -> spaces.Discrete:
+        return spaces.Discrete(OPTCGEnvBase.TOTAL_ACTIONS)
 
     def __init__(self, max_steps: int = 100, step_delay: float = 0.5) -> None:
         super().__init__()
@@ -118,7 +134,7 @@ class OPTCGEnvBase(AECEnv):
         self.agents: List[str] = []
 
         self.action_spaces = {
-            agent: spaces.Discrete(25) for agent in self.possible_agents
+            agent: self._build_action_space() for agent in self.possible_agents
         }
         obs_space = self._build_obs_space()
         self.observation_spaces = {agent: obs_space for agent in self.possible_agents}
@@ -133,6 +149,7 @@ class OPTCGEnvBase(AECEnv):
 
         if self.FAST_MODE and self.fake_obs:
             obs = copy(self.fake_obs)
+            obs.can_attack = np.random.random() > 0.5
         else:
             proceed = False
             while not proceed:
@@ -155,12 +172,14 @@ class OPTCGEnvBase(AECEnv):
         raw_power_opp = obs.attack_powers[0] if agent_is_p1 else obs.attack_powers[1]
 
         def scale_power(val: int) -> int:
-            return val if val == -1 else val // 1000
+            if val == -1:
+                return 99
+            return val // 1000
 
         attack_power = scale_power(raw_power_self)
         attack_power_opponent = scale_power(raw_power_opp)
 
-        return OPTCGPlayerObs(
+        obs_dict = OPTCGPlayerObs(
             can_attack=obs.can_attack,
             can_blocker=obs.can_blocker,
             can_choose_from_top=obs.can_choose_from_top,
@@ -189,6 +208,8 @@ class OPTCGEnvBase(AECEnv):
             attack_power=attack_power,
             attack_power_opponent=attack_power_opponent,
         ).values()
+        obs_dict["action_mask"] = self.create_action_mask(obs_dict)
+        return obs_dict
 
     # ------------------------------------------------------------------
     # Core API
@@ -212,11 +233,22 @@ class OPTCGEnvBase(AECEnv):
             "player_1" if self.agent_selection == "player_0" else "player_0"
         )
 
-    def action_mask(self, agent: str | None = None) -> list[int]:
-        if agent is None:
-            agent = self.agent_selection
-        n = self.action_spaces[agent].__getattribute__("n")
-        return [1] * n
+    def create_action_mask(self, obs: dict[str, Any]) -> np.ndarray:
+        num_don = int(obs.get("num_active_don", 0))
+        can_attack = bool(obs.get("can_attack", 0))
+
+        attach_mask = [1 if i <= num_don else 0 for i in range(1, self.MAX_ATTACH_DON + 1)]
+
+        if can_attack:
+            rested = list(obs.get("rested_cards_opponent", [0] * self.MAX_ATTACK_TARGET))
+            attack_target_mask = [1] + [int(v) for v in rested[: self.MAX_ATTACK_TARGET]]
+        else:
+            attack_target_mask = [0] * (self.MAX_ATTACK_TARGET + 1)
+
+        mask: list[int] = [1]
+        mask.extend(attach_mask)
+        mask.extend(attack_target_mask)
+        return np.array(mask, dtype=np.int8)
 
     def step(self, action: int) -> None:
         """Execute *action* and update environment state."""
@@ -229,16 +261,25 @@ class OPTCGEnvBase(AECEnv):
 
         self._clear_rewards()
         reward = 0.0
-        if action == 20:
-            if self.agent_selection == "player_0":
-                reward = 1
-            else:
-                reward = -1
-        if action == 14:
-            if self.agent_selection == "player_1":
-                reward = 1
-            else:
-                reward = -1
+
+        if action == self.INTENT_END_TURN:
+            intent = self.INTENT_END_TURN
+        elif 1 <= action <= self.MAX_ATTACH_DON:
+            intent = self.INTENT_ATTACH_DON
+            count = action
+            if not 1 <= count <= self.MAX_ATTACH_DON:
+                raise ValueError("attach_don_count must be 1-10")
+        elif (
+            self.MAX_ATTACH_DON + 1
+            <= action
+            < self.MAX_ATTACH_DON + 1 + self.MAX_ATTACK_TARGET + 1
+        ):
+            intent = self.INTENT_ATTACK
+            target = action - (self.MAX_ATTACH_DON + 1)
+            if not 0 <= target <= self.MAX_ATTACK_TARGET:
+                raise ValueError("attack_target must be 0-5")
+        else:
+            raise ValueError("invalid action")
 
         self.rewards[self.agent_selection] = reward
         self._last_obs["player_0"] = self.observe("player_0")
@@ -297,7 +338,7 @@ class OPTCGEnv(OPTCGEnvBase, gym.Env):
         return obs
 
     def action_mask(self):
-        return super().action_mask(self.agent_selection)
+        return super().create_action_mask(self._last_obs[self.agent_selection])
 
 
 def main(num_steps: int = 10) -> None:
@@ -310,7 +351,7 @@ def main(num_steps: int = 10) -> None:
 
     # Player 1 takes five actions
     for i in range(5):
-        action = env.action_spaces[env.agent_selection].sample()
+        action = env.action_spaces[env.agent_selection].sample(env.action_mask())
         obs, reward, terminated, truncated, _ = env.step(action)
         print(f"p1 step {i}: a={action} r={reward} term={terminated} trunc={truncated}")
         if terminated or truncated:
@@ -320,7 +361,7 @@ def main(num_steps: int = 10) -> None:
     # Switch to Player 2
     env.switch_player()
     for i in range(4):
-        action = env.action_spaces[env.agent_selection].sample()
+        action = env.action_spaces[env.agent_selection].sample(env.action_mask())
         obs, reward, terminated, truncated, _ = env.step(action)
         print(f"p2 step {i}: a={action} r={reward} term={terminated} trunc={truncated}")
         if terminated or truncated:
@@ -329,7 +370,7 @@ def main(num_steps: int = 10) -> None:
 
     # Switch back to Player 1 for a final action
     env.switch_player()
-    action = env.action_spaces[env.agent_selection].sample()
+    action = env.action_spaces[env.agent_selection].sample(env.action_mask())
     obs, reward, terminated, truncated, _ = env.step(action)
     print(f"p1 step 5: a={action} r={reward} term={terminated} trunc={truncated}")
     print("final obs ->", obs)
