@@ -78,6 +78,10 @@ class OPTCGEnvBase(AECEnv):
     P1 = "player_0"
     P2 = "player_1"
 
+    INTENT_ATTACH_DON = 0
+    INTENT_ATTACK = 1
+    INTENTS = ["attach_don", "attack"]
+
     @staticmethod
     def _build_obs_space() -> spaces.Dict:
         """Generate an observation space based on :class:`OPTCGPlayerObs`."""
@@ -104,7 +108,28 @@ class OPTCGEnvBase(AECEnv):
                     high=13000,
                     dtype=np.int64,
                 )
+        space_mapping["action_mask"] = spaces.Dict(
+            {
+                "intent": spaces.MultiBinary(len(OPTCGEnvBase.INTENTS)),
+                "attach_don_count": spaces.MultiBinary(10),
+                "attack_target": spaces.MultiBinary(6),
+            }
+        )
         return spaces.Dict(space_mapping)
+
+    @staticmethod
+    def _build_action_space() -> spaces.Dict:
+        return spaces.Dict(
+            {
+                "intent": spaces.Discrete(len(OPTCGEnvBase.INTENTS)),
+                "attach_don_count": spaces.Box(
+                    low=1, high=10, shape=(1,), dtype=np.int64
+                ),
+                "attack_target": spaces.Box(
+                    low=0, high=5, shape=(1,), dtype=np.int64
+                ),
+            }
+        )
 
     def __init__(self, max_steps: int = 100, step_delay: float = 0.5) -> None:
         super().__init__()
@@ -118,7 +143,7 @@ class OPTCGEnvBase(AECEnv):
         self.agents: List[str] = []
 
         self.action_spaces = {
-            agent: spaces.Discrete(25) for agent in self.possible_agents
+            agent: self._build_action_space() for agent in self.possible_agents
         }
         obs_space = self._build_obs_space()
         self.observation_spaces = {agent: obs_space for agent in self.possible_agents}
@@ -160,7 +185,7 @@ class OPTCGEnvBase(AECEnv):
         attack_power = scale_power(raw_power_self)
         attack_power_opponent = scale_power(raw_power_opp)
 
-        return OPTCGPlayerObs(
+        obs_dict = OPTCGPlayerObs(
             can_attack=obs.can_attack,
             can_blocker=obs.can_blocker,
             can_choose_from_top=obs.can_choose_from_top,
@@ -189,6 +214,8 @@ class OPTCGEnvBase(AECEnv):
             attack_power=attack_power,
             attack_power_opponent=attack_power_opponent,
         ).values()
+        obs_dict["action_mask"] = self.action_mask(agent)
+        return obs_dict
 
     # ------------------------------------------------------------------
     # Core API
@@ -212,13 +239,16 @@ class OPTCGEnvBase(AECEnv):
             "player_1" if self.agent_selection == "player_0" else "player_0"
         )
 
-    def action_mask(self, agent: str | None = None) -> list[int]:
+    def action_mask(self, agent: str | None = None) -> dict[str, list[int]]:
         if agent is None:
             agent = self.agent_selection
-        n = self.action_spaces[agent].__getattribute__("n")
-        return [1] * n
+        return {
+            "intent": [1 for _ in range(len(self.INTENTS))],
+            "attach_don_count": [1] * 10,
+            "attack_target": [1] * 6,
+        }
 
-    def step(self, action: int) -> None:
+    def step(self, action: dict[str, Any]) -> None:
         """Execute *action* and update environment state."""
         if (
             self.terminations[self.agent_selection]
@@ -229,16 +259,18 @@ class OPTCGEnvBase(AECEnv):
 
         self._clear_rewards()
         reward = 0.0
-        if action == 20:
-            if self.agent_selection == "player_0":
-                reward = 1
-            else:
-                reward = -1
-        if action == 14:
-            if self.agent_selection == "player_1":
-                reward = 1
-            else:
-                reward = -1
+
+        intent = int(action.get("intent", -1))
+        if intent == self.INTENT_ATTACH_DON:
+            count = int(action.get("attach_don_count", -1))
+            if not 1 <= count <= 10:
+                raise ValueError("attach_don_count must be 1-10")
+        elif intent == self.INTENT_ATTACK:
+            target = int(action.get("attack_target", -1))
+            if not 0 <= target <= 5:
+                raise ValueError("attack_target must be 0-5")
+        else:
+            raise ValueError("invalid intent")
 
         self.rewards[self.agent_selection] = reward
         self._last_obs["player_0"] = self.observe("player_0")
@@ -278,7 +310,7 @@ class OPTCGEnv(OPTCGEnvBase, gym.Env):
         self.action_space = super().action_space(self.possible_agents[0]) # type: ignore
         return self.observe(self.agent_selection), {}
 
-    def step(self, action: int):
+    def step(self, action: dict[str, Any]):
         current_agent = self.agent_selection
         super().step(action)
         next_agent = self.agent_selection
