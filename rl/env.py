@@ -11,19 +11,13 @@ from gymnasium import spaces
 
 import gymnasium as gym
 from utils.gui import gui_automation_starter as GUI
+from utils.gui import gui_macros
 from utils.vision import finder
 
 
 @dataclass
 class OPTCGPlayerObs:
-    can_blocker: bool
-    can_choose_from_top: bool
-    can_choose_friendly_target: bool
-    can_choose_enemy_target: bool
-    can_deploy: bool
-    can_draw: bool
-    can_end_turn: bool
-    can_resolve: bool
+    """Observation data returned to the learning agent."""
     choice_cards: List[str]
     hand: List[str]
     board: List[str]
@@ -41,14 +35,6 @@ class OPTCGPlayerObs:
 
     def values(self):
         return {
-            "can_blocker": int(self.can_blocker),
-            "can_choose_from_top": int(self.can_choose_from_top),
-            "can_choose_friendly_target": int(self.can_choose_friendly_target),
-            "can_choose_enemy_target": int(self.can_choose_enemy_target),
-            "can_deploy": int(self.can_deploy),
-            "can_draw": int(self.can_draw),
-            "can_end_turn": int(self.can_end_turn),
-            "can_resolve": int(self.can_resolve),
             "choice_cards": np.array(self.choice_cards),
             "hand": np.array(self.hand),
             "board": np.array(self.board),
@@ -156,7 +142,7 @@ class OPTCGEnvBase(AECEnv):
             while not proceed:
                 obs = self._vision.scan()
                 self.fake_obs = copy(obs)
-                if obs.can_return_cards:
+                if gui_macros.button_visible(gui_macros.RETURN_CARDS_TO_DECK_BTN):
                     GUI.click_action0()
                     continue
                 proceed = True
@@ -181,14 +167,6 @@ class OPTCGEnvBase(AECEnv):
         attack_power_opponent = scale_power(raw_power_opp)
 
         obs_dict = OPTCGPlayerObs(
-            can_blocker=obs.can_blocker,
-            can_choose_from_top=obs.can_choose_from_top,
-            can_choose_friendly_target=obs.can_choose_friendly_target,
-            can_choose_enemy_target=obs.can_choose_enemy_target,
-            can_deploy=obs.can_deploy,
-            can_draw=obs.can_draw,
-            can_end_turn=obs.can_end_turn,
-            can_resolve=obs.can_resolve,
             choice_cards=obs.choice_cards,
             hand=obs.hand_p1 if agent_is_p1 else obs.hand_p2,
             board=obs.board_p1 if agent_is_p1 else obs.board_p2,

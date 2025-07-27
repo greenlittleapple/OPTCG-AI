@@ -26,6 +26,29 @@ import time
 from utils.gui import gui_automation_starter as GUI
 from utils.vision import finder
 
+# Convenience helpers --------------------------------------------------
+
+def button_visible(name: str) -> bool:
+    """Return ``True`` if the named GUI button is currently visible."""
+    return bool(finder.loader.find(name))
+
+# ---------------------------------------------------------------------
+# Button name constants ------------------------------------------------
+# ---------------------------------------------------------------------
+
+ATTACK_BTN = "attack"
+NO_BLOCKER_BTN = "no_blocker"
+CHOOSE_ZERO_TARGETS_BTN = "choose_0_targets"
+CHOOSE_NEG1_TARGETS_BTN = "choose_-1_targets"
+CHOOSE_FRIENDLY_TARGETS_BTN = "choose_0_friendly_targets"
+SELECT_CHARACTER_TO_REPLACE_BTN = "select_character_to_replace"
+SELECT_TARGET_BTN = "select_target"
+DEPLOY_BTN = "deploy"
+DONT_DRAW_ANY_BTN = "dont_draw_any"
+END_TURN_BTN = "end_turn"
+RESOLVE_ATTACK_BTN = "resolve_attack"
+RETURN_CARDS_TO_DECK_BTN = "return_cards_to_deck"
+
 def _wait_for_button(name: str, timeout: float = 2.0, interval: float = 0.1) -> bool:
     """Return True if *name* button appears within *timeout* seconds."""
     end = time.time() + timeout
@@ -78,7 +101,7 @@ def perform_action(
     _click_board_card(acting_player, acting_card_index)
 
     # --- Ensure attack button is visible when required --------------
-    if action_number == 1 and not _wait_for_button("attack"):
+    if action_number == 1 and not _wait_for_button(ATTACK_BTN):
         raise RuntimeError("Attack button not available")
 
     # --- Click action button ----------------------------------------
@@ -145,6 +168,15 @@ def deploy_card(
 
     # --- Confirm with Action 1 --------------------------------------
     GUI.click_action1()
+
+
+def end_turn() -> None:
+    """End the current turn by double-clicking Action 0."""
+    if not _wait_for_button(END_TURN_BTN):
+        raise RuntimeError("End Turn button not available")
+    GUI.click_action0()
+    time.sleep(0.1)
+    GUI.click_action0()
 
 
 def attach_don(
