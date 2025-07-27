@@ -58,6 +58,14 @@ def _wait_for_button(name: str, timeout: float = 2.0, interval: float = 0.1) -> 
         time.sleep(interval)
     return False
 
+
+def _click_action_when_visible(action_number: int, name: str) -> bool:
+    """Return ``True`` and click if *name* button appears."""
+    if _wait_for_button(name):
+        _click_action_button(action_number)
+        return True
+    return False
+
 # ---------------------------------------------------------------------
 # Generic helper -------------------------------------------------------
 # ---------------------------------------------------------------------
@@ -67,6 +75,7 @@ def perform_action(
     acting_card_index: int,
     action_number: int,
     targets: List[Tuple[int, int]] | None = None,
+    require_button: str | None = None,
 ) -> None:
     """Execute an in‑game action.
 
@@ -81,6 +90,8 @@ def perform_action(
     targets : list[tuple[int, int]] | None
         Each tuple is (player, card_index). Provide None (or empty list) for
         no‑target actions.
+    require_button : str | None
+        If provided, wait for this GUI button before clicking the action.
     """
     # --- Validate ----------------------------------------------------
     if acting_player not in (1, 2):
@@ -100,12 +111,12 @@ def perform_action(
     # --- Select acting card -----------------------------------------
     _click_board_card(acting_player, acting_card_index)
 
-    # --- Ensure attack button is visible when required --------------
-    if action_number == 1 and not _wait_for_button(ATTACK_BTN):
-        raise RuntimeError("Attack button not available")
-
-    # --- Click action button ----------------------------------------
-    _click_action_button(action_number)
+    # --- Click action button (optionally waiting for cue) -----------
+    if require_button is not None:
+        if not _click_action_when_visible(action_number, require_button):
+            raise RuntimeError(f"{require_button} button not available")
+    else:
+        _click_action_button(action_number)
 
     # --- Click each target -----------------------------------------
     for t_player, t_idx in targets:
@@ -136,6 +147,7 @@ def attack(
         acting_card_index=acting_card_index,
         action_number=1,
         targets=[(target_player, target_card_index)],
+        require_button=ATTACK_BTN,
     )
 
 
