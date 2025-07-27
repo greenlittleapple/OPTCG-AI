@@ -149,6 +149,7 @@ class OPTCGEnvBase(AECEnv):
 
         if self.FAST_MODE and self.fake_obs:
             obs = copy(self.fake_obs)
+            obs.can_attack = np.random.random() > 0.5
         else:
             proceed = False
             while not proceed:
@@ -232,7 +233,7 @@ class OPTCGEnvBase(AECEnv):
             "player_1" if self.agent_selection == "player_0" else "player_0"
         )
 
-    def create_action_mask(self, obs: dict[str, Any]) -> list[int]:
+    def create_action_mask(self, obs: dict[str, Any]) -> np.ndarray:
         num_don = int(obs.get("num_active_don", 0))
         can_attack = bool(obs.get("can_attack", 0))
 
@@ -247,7 +248,7 @@ class OPTCGEnvBase(AECEnv):
         mask: list[int] = [1]
         mask.extend(attach_mask)
         mask.extend(attack_target_mask)
-        return mask
+        return np.array(mask, dtype=np.int8)
 
     def step(self, action: int) -> None:
         """Execute *action* and update environment state."""
@@ -350,7 +351,7 @@ def main(num_steps: int = 10) -> None:
 
     # Player 1 takes five actions
     for i in range(5):
-        action = env.action_spaces[env.agent_selection].sample()
+        action = env.action_spaces[env.agent_selection].sample(env.action_mask())
         obs, reward, terminated, truncated, _ = env.step(action)
         print(f"p1 step {i}: a={action} r={reward} term={terminated} trunc={truncated}")
         if terminated or truncated:
@@ -360,7 +361,7 @@ def main(num_steps: int = 10) -> None:
     # Switch to Player 2
     env.switch_player()
     for i in range(4):
-        action = env.action_spaces[env.agent_selection].sample()
+        action = env.action_spaces[env.agent_selection].sample(env.action_mask())
         obs, reward, terminated, truncated, _ = env.step(action)
         print(f"p2 step {i}: a={action} r={reward} term={terminated} trunc={truncated}")
         if terminated or truncated:
@@ -369,7 +370,7 @@ def main(num_steps: int = 10) -> None:
 
     # Switch back to Player 1 for a final action
     env.switch_player()
-    action = env.action_spaces[env.agent_selection].sample()
+    action = env.action_spaces[env.agent_selection].sample(env.action_mask())
     obs, reward, terminated, truncated, _ = env.step(action)
     print(f"p1 step 5: a={action} r={reward} term={terminated} trunc={truncated}")
     print("final obs ->", obs)
