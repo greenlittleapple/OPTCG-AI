@@ -21,8 +21,19 @@ All text is ASCII‑only; no smart quotes.
 from __future__ import annotations
 
 from typing import List, Tuple
+import time
 
 from utils.gui import gui_automation_starter as GUI
+from utils.vision import finder
+
+def _wait_for_button(name: str, timeout: float = 2.0, interval: float = 0.1) -> bool:
+    """Return True if *name* button appears within *timeout* seconds."""
+    end = time.time() + timeout
+    while time.time() < end:
+        if finder.loader.find(name):
+            return True
+        time.sleep(interval)
+    return False
 
 # ---------------------------------------------------------------------
 # Generic helper -------------------------------------------------------
@@ -66,6 +77,10 @@ def perform_action(
     # --- Select acting card -----------------------------------------
     _click_board_card(acting_player, acting_card_index)
 
+    # --- Ensure attack button is visible when required --------------
+    if action_number == 1 and not _wait_for_button("attack"):
+        raise RuntimeError("Attack button not available")
+
     # --- Click action button ----------------------------------------
     _click_action_button(action_number)
 
@@ -84,6 +99,9 @@ def attack(
     target_card_index: int,
 ) -> None:
     """Attack macro (Action 1).
+
+    The function waits for the Attack button to appear after selecting the
+    acting card, raising ``RuntimeError`` if it doesn't become visible.
 
     Examples
     --------

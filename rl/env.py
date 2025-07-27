@@ -16,7 +16,6 @@ from utils.vision import finder
 
 @dataclass
 class OPTCGPlayerObs:
-    can_attack: bool
     can_blocker: bool
     can_choose_from_top: bool
     can_choose_friendly_target: bool
@@ -42,7 +41,6 @@ class OPTCGPlayerObs:
 
     def values(self):
         return {
-            "can_attack": int(self.can_attack),
             "can_blocker": int(self.can_blocker),
             "can_choose_from_top": int(self.can_choose_from_top),
             "can_choose_friendly_target": int(self.can_choose_friendly_target),
@@ -153,7 +151,6 @@ class OPTCGEnvBase(AECEnv):
 
         if self.FAST_MODE and self.fake_obs:
             obs = copy(self.fake_obs)
-            obs.can_attack = np.random.random() > 0.5
         else:
             proceed = False
             while not proceed:
@@ -184,7 +181,6 @@ class OPTCGEnvBase(AECEnv):
         attack_power_opponent = scale_power(raw_power_opp)
 
         obs_dict = OPTCGPlayerObs(
-            can_attack=obs.can_attack,
             can_blocker=obs.can_blocker,
             can_choose_from_top=obs.can_choose_from_top,
             can_choose_friendly_target=obs.can_choose_friendly_target,
@@ -245,11 +241,11 @@ class OPTCGEnvBase(AECEnv):
 
     def create_action_mask(self, obs: dict[str, Any]) -> np.ndarray:
         num_don = int(obs.get("num_active_don", 0))
-        can_attack = bool(obs.get("can_attack", 0))
+        leader_rested = bool(obs.get("leader_rested", 0))
 
         attach_mask = [1 if i <= num_don else 0 for i in range(1, self.MAX_ATTACH_DON + 1)]
 
-        if can_attack:
+        if not leader_rested:
             rested = list(obs.get("rested_cards_opponent", [0] * self.MAX_ATTACK_TARGET))
             attack_target_mask = [1] + [int(v) for v in rested[: self.MAX_ATTACK_TARGET]]
         else:
