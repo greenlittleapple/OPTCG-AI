@@ -171,6 +171,13 @@ def end_turn() -> None:
         time.sleep(0.1)
         GUI.click_action0()
 
+def reset_game() -> None:
+    """Restart game after Rematch button shows up (aka Game Over)"""
+    assert click_action_when_visible(0, constants.REMATCH_BTN)
+    GUI.click_start()
+    GUI.click_action0()
+    GUI.click_action0()
+
 
 def attach_don(
     acting_player: int,
