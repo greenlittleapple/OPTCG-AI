@@ -98,7 +98,7 @@ class OPTCGEnvBase(AECEnv):
                         ),
                     ),
                     low=0,
-                    high=13000,
+                    high=16,
                     dtype=np.int64,
                 )
         space_mapping["action_mask"] = spaces.MultiBinary(
@@ -131,7 +131,7 @@ class OPTCGEnvBase(AECEnv):
         def process_card_names(cards: List[str]) -> list:
             card_ids = []
             for card in cards:
-                card_id = int(card[2:].replace("-", "")) if card != "" else 0
+                card_id = constants.CARD_IDS.get(card, 0)
                 card_ids.append(card_id)
             return card_ids
 
