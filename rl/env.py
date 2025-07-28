@@ -10,7 +10,7 @@ from pettingzoo.utils.env import AECEnv
 from gymnasium import spaces
 
 import gymnasium as gym
-from utils.gui import gui_automation_starter as GUI
+from utils import constants
 from utils.gui import gui_macros
 from utils.vision import finder
 
@@ -138,7 +138,7 @@ class OPTCGEnvBase(AECEnv):
         if self.FAST_MODE and self.fake_obs:
             obs = copy(self.fake_obs)
         else:
-            gui_macros.click_action_when_visible(0, gui_macros.RETURN_CARDS_TO_DECK_BTN)
+            gui_macros.click_action_when_visible(0, constants.RETURN_CARDS_TO_DECK_BTN)
             obs = self._vision.scan()
             self.fake_obs = copy(obs)
 

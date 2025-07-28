@@ -25,20 +25,7 @@ import time
 
 from utils.gui import gui_automation_starter as GUI
 from utils.vision import finder
-from utils.constants import (
-    ATTACK_BTN,
-    NO_BLOCKER_BTN,
-    CHOOSE_ZERO_TARGETS_BTN,
-    CHOOSE_NEG1_TARGETS_BTN,
-    CHOOSE_FRIENDLY_TARGETS_BTN,
-    SELECT_CHARACTER_TO_REPLACE_BTN,
-    SELECT_TARGET_BTN,
-    DEPLOY_BTN,
-    DONT_DRAW_ANY_BTN,
-    END_TURN_BTN,
-    RESOLVE_ATTACK_BTN,
-    RETURN_CARDS_TO_DECK_BTN,
-)
+from utils import constants
 
 VISION = finder.loader
 
@@ -140,7 +127,7 @@ def attack(
         acting_card_index=acting_card_index,
         action_number=1,
         targets=[(target_player, target_card_index)],
-        require_button=ATTACK_BTN,
+        require_button=constants.ATTACK_BTN,
     )
 
 
@@ -177,7 +164,7 @@ def deploy_card(
 
 def end_turn() -> None:
     """End the current turn by double-clicking Action 0."""
-    if click_action_when_visible(0, END_TURN_BTN):
+    if click_action_when_visible(0, constants.END_TURN_BTN):
         time.sleep(0.1)
         GUI.click_action0()
 
