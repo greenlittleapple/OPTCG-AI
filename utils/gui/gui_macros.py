@@ -62,7 +62,7 @@ def perform_action(
     Parameters
     ----------
     acting_player : int
-        1 for Player 1, 2 for Player 2.
+        0 for Player 1, 1 for Player 2.
     acting_card_index : int
         0 selects the leader; 1–5 select board card slots.
     action_number : int
@@ -74,8 +74,8 @@ def perform_action(
         If provided, wait for this GUI button before clicking the action.
     """
     # --- Validate ----------------------------------------------------
-    if acting_player not in (1, 2):
-        raise ValueError("acting_player must be 1 or 2")
+    if acting_player not in (0, 1):
+        raise ValueError("acting_player must be 0 or 1")
     if not 0 <= acting_card_index <= 5:
         raise ValueError("acting_card_index must be 0–5")
     if action_number not in (0, 1, 2, 3):
@@ -83,8 +83,8 @@ def perform_action(
     if targets is None:
         targets = []
     for t_player, t_idx in targets:
-        if t_player not in (1, 2):
-            raise ValueError("target player must be 1 or 2")
+        if t_player not in (0, 1):
+            raise ValueError("target player must be 0 or 1")
         if not 0 <= t_idx <= 5:
             raise ValueError("target card index must be 0–5")
 
@@ -119,8 +119,8 @@ def attack(
 
     Examples
     --------
-    >>> attack(1, 0, 2, 0)  # P1 leader attacks P2 leader
-    >>> attack(2, 3, 1, 2)  # P2 slot‑3 card attacks P1 slot‑2 card
+    >>> attack(0, 0, 1, 0)  # P1 leader attacks P2 leader
+    >>> attack(1, 3, 0, 2)  # P2 slot‑3 card attacks P1 slot‑2 card
     """
     perform_action(
         acting_player=acting_player,
@@ -142,7 +142,7 @@ def select_card(
     Parameters
     ----------
     acting_player : int
-        1 for Player 1, 2 for Player 2.
+        0 for Player 1, 1 for Player 2.
     hand_card_index : int
         Index of the card to deploy (0 = left‑most).
     hand_size : int
@@ -151,8 +151,8 @@ def select_card(
         Deploy card (will check if Deploy button exists)
     """
     # --- Validate ----------------------------------------------------
-    if acting_player not in (1, 2):
-        raise ValueError("acting_player must be 1 or 2")
+    if acting_player not in (0, 1):
+        raise ValueError("acting_player must be 0 or 1")
     if hand_size < 1:
         raise ValueError("hand_size must be at least 1")
     if not 0 <= hand_card_index < hand_size:
@@ -193,7 +193,7 @@ def attach_don(
     Parameters
     ----------
     acting_player : int
-        1 or 2 (whose turn it is). Only that player can attach DON.
+        0 or 1 (whose turn it is). Only that player can attach DON.
     card_index : int
         0 = leader, 1–5 = board slots.
     attachable_don : int
@@ -205,8 +205,8 @@ def attach_don(
         How many DON to attach to the chosen card.
     """
     # --- Validate ----------------------------------------------------
-    if acting_player not in (1, 2):
-        raise ValueError("acting_player must be 1 or 2")
+    if acting_player not in (0, 1):
+        raise ValueError("acting_player must be 0 or 1")
     if not 0 <= card_index <= 5:
         raise ValueError("card_index must be 0–5")
     if not 0 <= attachable_don <= total_don <= 10:
@@ -215,7 +215,7 @@ def attach_don(
         raise ValueError("num_to_attach must be 1..attachable_don")
 
     # --- Determine which DON helper to use --------------------------
-    click_don = GUI.click_p1_don if acting_player == 1 else GUI.click_p2_don
+    click_don = GUI.click_p1_don if acting_player == 0 else GUI.click_p2_don
 
     # --- Compute DON indices to click -------------------------------
     first_to_click = total_don - num_to_attach
@@ -248,12 +248,12 @@ def _click_action_button(num: int) -> None:
 
 
 def _click_board_card(player: int, idx: int) -> None:
-    if player == 1:
+    if player == 0:
         if idx == 0:
             GUI.click_p1_leader()
         else:
             GUI.click_p1_card(idx - 1)
-    else:  # player 2
+    else:  # player 1 == 1 -> Player 2
         if idx == 0:
             GUI.click_p2_leader()
         else:
@@ -261,7 +261,7 @@ def _click_board_card(player: int, idx: int) -> None:
 
 
 def _click_hand_card(player: int, idx: int, hand_size: int) -> None:
-    if player == 1:
+    if player == 0:
         GUI.click_p1_hand(card_index=idx, hand_size=hand_size)
     else:
         GUI.click_p2_hand(card_index=idx, hand_size=hand_size)

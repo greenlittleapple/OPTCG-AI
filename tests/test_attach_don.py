@@ -25,7 +25,7 @@ def test_attach_don_real():
 
     # ---- Phase 1: attach 10 DON to board card #1 for both players --------
     MACROS.attach_don(
-        acting_player=1,
+        acting_player=0,
         card_index=1,   # board card #1
         attachable_don=10,
         total_don=10,
@@ -35,7 +35,7 @@ def test_attach_don_real():
     MACROS.end_turn(); time.sleep(0.8)
 
     MACROS.attach_don(
-        acting_player=2,
+        acting_player=1,
         card_index=1,   # board card #1
         attachable_don=10,
         total_don=10,
@@ -47,7 +47,7 @@ def test_attach_don_real():
     # ---- Phase 2: partial DON attachment to leaders ----------------------
     # P1: 7 total DON, 3 attachable, attach only 2 to the Leader
     MACROS.attach_don(
-        acting_player=1,
+        acting_player=0,
         card_index=0,   # Leader
         attachable_don=3,
         total_don=7,
@@ -58,7 +58,7 @@ def test_attach_don_real():
 
     # P2: 5 total DON, 5 attachable, attach 3 to the Leader
     MACROS.attach_don(
-        acting_player=2,
+        acting_player=1,
         card_index=0,   # Leader
         attachable_don=5,
         total_don=5,

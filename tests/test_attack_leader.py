@@ -29,15 +29,15 @@ def test_leader_attack_real():
 
     time.sleep(2)
     # ---- Player 1 turn --------------------------------------------------
-    MACROS.attack(acting_player=1, acting_card_index=0,
-                  target_player=2, target_card_index=0)
+    MACROS.attack(acting_player=0, acting_card_index=0,
+                  target_player=1, target_card_index=0)
     time.sleep(0.4)
     GUI.click_action0();      time.sleep(0.4)   # P2 resolves
     MACROS.end_turn();     time.sleep(0.6)
 
     # ---- Player 2 turn --------------------------------------------------
-    MACROS.attack(acting_player=2, acting_card_index=0,
-                  target_player=1, target_card_index=0)
+    MACROS.attack(acting_player=1, acting_card_index=0,
+                  target_player=0, target_card_index=0)
     time.sleep(0.4)
     GUI.click_action0();      time.sleep(0.4)   # P1 resolves
     MACROS.end_turn();     time.sleep(0.6)
