@@ -175,8 +175,10 @@ def reset_game() -> None:
     """Restart game after Rematch button shows up (aka Game Over)"""
     assert click_action_when_visible(0, constants.REMATCH_BTN)
     GUI.click_start()
-    GUI.click_action0()
-    GUI.click_action0()
+    GUI.click_action0() # Keep P1 hand
+    GUI.click_action0() # Keep P2 hand
+    end_turn() # Skip P1 first turn
+    end_turn() # Skip P2 first turn
 
 
 def attach_don(
