@@ -25,25 +25,9 @@ import time
 
 from utils.gui import gui_automation_starter as GUI
 from utils.vision import finder
+from utils import constants
 
 VISION = finder.loader
-
-# ---------------------------------------------------------------------
-# Button name constants ------------------------------------------------
-# ---------------------------------------------------------------------
-
-ATTACK_BTN = "attack"
-NO_BLOCKER_BTN = "no_blocker"
-CHOOSE_ZERO_TARGETS_BTN = "choose_0_targets"
-CHOOSE_NEG1_TARGETS_BTN = "choose_-1_targets"
-CHOOSE_FRIENDLY_TARGETS_BTN = "choose_0_friendly_targets"
-SELECT_CHARACTER_TO_REPLACE_BTN = "select_character_to_replace"
-SELECT_TARGET_BTN = "select_target"
-DEPLOY_BTN = "deploy"
-DONT_DRAW_ANY_BTN = "dont_draw_any"
-END_TURN_BTN = "end_turn"
-RESOLVE_ATTACK_BTN = "resolve_attack"
-RETURN_CARDS_TO_DECK_BTN = "return_cards_to_deck"
 
 def _wait_for_button(name: str, timeout: float = 1.0, interval: float = 0.1) -> bool:
     """Return True if *name* button appears within *timeout* seconds."""
@@ -143,7 +127,7 @@ def attack(
         acting_card_index=acting_card_index,
         action_number=1,
         targets=[(target_player, target_card_index)],
-        require_button=ATTACK_BTN,
+        require_button=constants.ATTACK_BTN,
     )
 
 
@@ -180,7 +164,7 @@ def deploy_card(
 
 def end_turn() -> None:
     """End the current turn by double-clicking Action 0."""
-    if click_action_when_visible(0, END_TURN_BTN):
+    if click_action_when_visible(0, constants.END_TURN_BTN):
         time.sleep(0.1)
         GUI.click_action0()
 
