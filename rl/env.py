@@ -74,6 +74,8 @@ class OPTCGEnvBase(AECEnv):
     P1 = "player_0"
     P2 = "player_1"
 
+    game_state = {"total_don_p1": 3, "total_don_p2": 4}
+
     class INTENTS(Enum):
         END_TURN = "end_turn"
         ATTACH_DON = "attach_don"
@@ -163,7 +165,6 @@ class OPTCGEnvBase(AECEnv):
         if self.FAST_MODE and self.fake_obs:
             obs = copy(self.fake_obs)
         else:
-            gui_macros.click_action_when_visible(0, constants.RETURN_CARDS_TO_DECK_BTN)
             obs = self._vision.scan()
             self.fake_obs = copy(obs)
 
@@ -304,9 +305,9 @@ class OPTCGEnvBase(AECEnv):
 
         match intent:
             case self.INTENTS.END_TURN:
-                pass
+                assert gui_macros.click_action_when_visible(0, constants.END_TURN_BTN)
             case self.INTENTS.ATTACH_DON:
-                pass
+                gui_macros.attach_don(int(self.agent_selection == self.agents[0]), 0, target, self._last_obs[self.agent_selection])
             case self.INTENTS.DEPLOY:
                 pass
             case self.INTENTS.ATTACK:
