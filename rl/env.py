@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from copy import copy
 from dataclasses import asdict, dataclass, fields
+from enum import Enum
 from typing import Any, List
 
 import numpy as np
@@ -65,18 +66,34 @@ class OPTCGEnvBase(AECEnv):
     render_mode = None
     fake_obs = None
     FAST_MODE = True
-    VERBOSE = False
+    VERBOSE = True
     P1 = "player_0"
     P2 = "player_1"
 
-    INTENT_END_TURN = 0
-    INTENT_ATTACH_DON = 1
-    INTENT_ATTACK = 2
-    INTENTS = ["end_turn", "attach_don", "attack"]
+    class INTENTS(Enum):
+        END_TURN = "end_turn"
+        ATTACH_DON = "attach_don"
+        ATTACK = "attack"
+        COUNTER = "counter"
+        RESOLVE = "resolve"
 
-    MAX_ATTACH_DON = 10
-    MAX_ATTACK_TARGET = 5
-    TOTAL_ACTIONS = 1 + MAX_ATTACH_DON + (MAX_ATTACK_TARGET + 1)
+    INTENTS_MAX = {
+        INTENTS.END_TURN: 1,
+        INTENTS.ATTACH_DON: 10,
+        INTENTS.ATTACK: 6,
+        INTENTS.COUNTER: 10,
+        INTENTS.RESOLVE: 1,
+    }
+
+    INTENTS_ORDER = [
+        INTENTS.END_TURN,
+        INTENTS.ATTACH_DON,
+        INTENTS.ATTACK,
+        INTENTS.COUNTER,
+        INTENTS.RESOLVE,
+    ]
+
+    TOTAL_ACTIONS = sum(INTENTS_MAX.values())
 
     @staticmethod
     def _build_obs_space() -> spaces.Dict:
@@ -215,26 +232,32 @@ class OPTCGEnvBase(AECEnv):
         )
 
     def create_action_mask(self, obs: dict[str, Any]) -> np.ndarray:
+        is_countering = obs["is_countering"]
+
+        # Handle End Turn logic
+        end_turn_mask = [not is_countering]
+
+        # Handle DON! Attach logic
         num_don = int(obs.get("num_active_don", 0))
+        attach_mask = [0] * 10 if is_countering else [1] * num_don + [0] * (10 - num_don)
+
+        # Handle Attack logic
         leader_rested = bool(obs.get("leader_rested", 0))
-
-        attach_mask = [
-            1 if i <= num_don else 0 for i in range(1, self.MAX_ATTACH_DON + 1)
-        ]
-
         if not leader_rested:
-            rested = list(
-                obs.get("rested_cards_opponent", [0] * self.MAX_ATTACK_TARGET)
-            )
-            attack_target_mask = [1] + [
-                int(v) for v in rested[: self.MAX_ATTACK_TARGET]
-            ]
+            rested = list(obs["rested_cards_opponent"])
+            attack_target_mask = [1] + rested
         else:
-            attack_target_mask = [0] * (self.MAX_ATTACK_TARGET + 1)
+            attack_target_mask = [0] * (self.INTENTS_MAX[self.INTENTS.ATTACK])
 
-        mask: list[int] = [1]
+        # Handle Counter / Resolve logic
+        counter_mask = [is_countering and card != 0 for card in obs["hand"]]
+        resolve_mask = [is_countering]
+
+        mask: list = end_turn_mask
         mask.extend(attach_mask)
         mask.extend(attack_target_mask)
+        mask.extend(counter_mask)
+        mask.extend(resolve_mask)
         return np.array(mask, dtype=np.int8)
 
     def step(self, action: int) -> None:
@@ -249,24 +272,28 @@ class OPTCGEnvBase(AECEnv):
         self._clear_rewards()
         reward = 0.0
 
-        if action == self.INTENT_END_TURN:
-            intent = self.INTENT_END_TURN
-        elif 1 <= action <= self.MAX_ATTACH_DON:
-            intent = self.INTENT_ATTACH_DON
-            count = action
-            if not 1 <= count <= self.MAX_ATTACH_DON:
-                raise ValueError("attach_don_count must be 1-10")
-        elif (
-            self.MAX_ATTACH_DON + 1
-            <= action
-            < self.MAX_ATTACH_DON + 1 + self.MAX_ATTACK_TARGET + 1
-        ):
-            intent = self.INTENT_ATTACK
-            target = action - (self.MAX_ATTACH_DON + 1)
-            if not 0 <= target <= self.MAX_ATTACK_TARGET:
-                raise ValueError("attack_target must be 0-5")
-        else:
-            raise ValueError("invalid action")
+        intent = None
+        target = int(action)  # for easier math
+        for temp_intent in self.INTENTS_ORDER:
+            if target + 1 - self.INTENTS_MAX[temp_intent] <= 0:
+                intent = temp_intent
+                break
+            target -= self.INTENTS_MAX[temp_intent]
+
+        match intent:
+            case self.INTENTS.END_TURN:
+                pass
+            case self.INTENTS.ATTACH_DON:
+                pass
+            case self.INTENTS.ATTACK:
+                pass
+            case self.INTENTS.COUNTER:
+                pass
+            case self.INTENTS.RESOLVE:
+                pass
+            case _:
+                raise ValueError('Invalid intent!')
+
 
         self.rewards[self.agent_selection] = reward
         self._last_obs["player_0"] = self.observe("player_0")
@@ -281,6 +308,7 @@ class OPTCGEnvBase(AECEnv):
 
         if self.VERBOSE:
             print(f"--- ACTION: {action}")
+            print(f'--- INTENT: {intent}; TARGET: {target}')
             print(f"--- OBS: {self._last_obs[self.agent_selection]}")
 
         self._accumulate_rewards()
