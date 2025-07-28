@@ -25,25 +25,22 @@ import time
 
 from utils.gui import gui_automation_starter as GUI
 from utils.vision import finder
+from utils.constants import (
+    ATTACK_BTN,
+    NO_BLOCKER_BTN,
+    CHOOSE_ZERO_TARGETS_BTN,
+    CHOOSE_NEG1_TARGETS_BTN,
+    CHOOSE_FRIENDLY_TARGETS_BTN,
+    SELECT_CHARACTER_TO_REPLACE_BTN,
+    SELECT_TARGET_BTN,
+    DEPLOY_BTN,
+    DONT_DRAW_ANY_BTN,
+    END_TURN_BTN,
+    RESOLVE_ATTACK_BTN,
+    RETURN_CARDS_TO_DECK_BTN,
+)
 
 VISION = finder.loader
-
-# ---------------------------------------------------------------------
-# Button name constants ------------------------------------------------
-# ---------------------------------------------------------------------
-
-ATTACK_BTN = "attack"
-NO_BLOCKER_BTN = "no_blocker"
-CHOOSE_ZERO_TARGETS_BTN = "choose_0_targets"
-CHOOSE_NEG1_TARGETS_BTN = "choose_-1_targets"
-CHOOSE_FRIENDLY_TARGETS_BTN = "choose_0_friendly_targets"
-SELECT_CHARACTER_TO_REPLACE_BTN = "select_character_to_replace"
-SELECT_TARGET_BTN = "select_target"
-DEPLOY_BTN = "deploy"
-DONT_DRAW_ANY_BTN = "dont_draw_any"
-END_TURN_BTN = "end_turn"
-RESOLVE_ATTACK_BTN = "resolve_attack"
-RETURN_CARDS_TO_DECK_BTN = "return_cards_to_deck"
 
 def _wait_for_button(name: str, timeout: float = 1.0, interval: float = 0.1) -> bool:
     """Return True if *name* button appears within *timeout* seconds."""
