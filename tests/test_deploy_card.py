@@ -21,9 +21,9 @@ def test_deploy_card_real():
     time.sleep(2)
     MACROS.deploy_card(acting_player=1, hand_card_index=0, hand_size=6)
     time.sleep(0.5)
-    GUI.click_end_turn(); time.sleep(0.7)
+    MACROS.end_turn(); time.sleep(0.7)
 
     MACROS.deploy_card(acting_player=2, hand_card_index=0, hand_size=7)
     time.sleep(0.5)
-    GUI.click_end_turn(); time.sleep(0.7)
+    MACROS.end_turn(); time.sleep(0.7)
     # No assertion required; any exception would fail the test.

@@ -27,7 +27,7 @@ def test_start_game_real():
     GUI.click_start();        time.sleep(0.6)
     GUI.click_action1();      time.sleep(0.4)   # P1 mulligan
     GUI.click_action0();      time.sleep(0.4)   # P2 mulligan
-    GUI.click_end_turn();     time.sleep(0.5)   # P1
-    GUI.click_end_turn();     time.sleep(0.5)   # P2
+    MACROS.end_turn();     time.sleep(0.5)   # P1
+    MACROS.end_turn();     time.sleep(0.5)   # P2
 
     # No assertion needed: we only care that no error was raised.

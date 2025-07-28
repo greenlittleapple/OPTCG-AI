@@ -138,14 +138,9 @@ class OPTCGEnvBase(AECEnv):
         if self.FAST_MODE and self.fake_obs:
             obs = copy(self.fake_obs)
         else:
-            proceed = False
-            while not proceed:
-                obs = self._vision.scan()
-                self.fake_obs = copy(obs)
-                if gui_macros.button_visible(gui_macros.RETURN_CARDS_TO_DECK_BTN):
-                    GUI.click_action0()
-                    continue
-                proceed = True
+            gui_macros.click_action_when_visible(0, gui_macros.RETURN_CARDS_TO_DECK_BTN)
+            obs = self._vision.scan()
+            self.fake_obs = copy(obs)
 
         obs.hand_p1 = process_card_names(obs.hand_p1)
         obs.hand_p2 = process_card_names(obs.hand_p2)

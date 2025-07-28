@@ -18,6 +18,7 @@ import time
 import importlib
 
 GUI = importlib.import_module("utils.gui.gui_automation_starter")
+MACROS = importlib.import_module("utils.gui.gui_macros")
 
 
 def test_select_hand_cards():
@@ -31,7 +32,7 @@ def test_select_hand_cards():
         time.sleep(0.3)
 
     GUI.click_action0(); time.sleep(0.4)   # Cancel
-    GUI.click_end_turn(); time.sleep(0.6)  # End P1 turn
+    MACROS.end_turn(); time.sleep(0.6)  # End P1 turn
 
     # ---- Player 2 hand ----------------------------------------------------
     for idx in range(7):
@@ -39,6 +40,6 @@ def test_select_hand_cards():
         time.sleep(0.3)
 
     GUI.click_action0(); time.sleep(0.4)   # Cancel
-    GUI.click_end_turn(); time.sleep(0.6)  # End P2 turn
+    MACROS.end_turn(); time.sleep(0.6)  # End P2 turn
 
     # No explicit assertions—test passes if no exception occurs.

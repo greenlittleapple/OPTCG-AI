@@ -26,11 +26,7 @@ import time
 from utils.gui import gui_automation_starter as GUI
 from utils.vision import finder
 
-# Convenience helpers --------------------------------------------------
-
-def button_visible(name: str) -> bool:
-    """Return ``True`` if the named GUI button is currently visible."""
-    return bool(finder.loader.find(name))
+VISION = finder.loader
 
 # ---------------------------------------------------------------------
 # Button name constants ------------------------------------------------
@@ -49,17 +45,17 @@ END_TURN_BTN = "end_turn"
 RESOLVE_ATTACK_BTN = "resolve_attack"
 RETURN_CARDS_TO_DECK_BTN = "return_cards_to_deck"
 
-def _wait_for_button(name: str, timeout: float = 2.0, interval: float = 0.1) -> bool:
+def _wait_for_button(name: str, timeout: float = 1.0, interval: float = 0.1) -> bool:
     """Return True if *name* button appears within *timeout* seconds."""
     end = time.time() + timeout
     while time.time() < end:
-        if finder.loader.find(name):
+        if VISION.find(name):
             return True
         time.sleep(interval)
     return False
 
 
-def _click_action_when_visible(action_number: int, name: str) -> bool:
+def click_action_when_visible(action_number: int, name: str) -> bool:
     """Return ``True`` and click if *name* button appears."""
     if _wait_for_button(name):
         _click_action_button(action_number)
@@ -113,7 +109,7 @@ def perform_action(
 
     # --- Click action button (optionally waiting for cue) -----------
     if require_button is not None:
-        if not _click_action_when_visible(action_number, require_button):
+        if not click_action_when_visible(action_number, require_button):
             raise RuntimeError(f"{require_button} button not available")
     else:
         _click_action_button(action_number)
@@ -184,11 +180,9 @@ def deploy_card(
 
 def end_turn() -> None:
     """End the current turn by double-clicking Action 0."""
-    if not _wait_for_button(END_TURN_BTN):
-        raise RuntimeError("End Turn button not available")
-    GUI.click_action0()
-    time.sleep(0.1)
-    GUI.click_action0()
+    if click_action_when_visible(0, END_TURN_BTN):
+        time.sleep(0.1)
+        GUI.click_action0()
 
 
 def attach_don(

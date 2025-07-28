@@ -16,6 +16,7 @@ import time
 import importlib
 
 GUI = importlib.import_module("utils.gui.gui_automation_starter")
+MACROS = importlib.import_module("utils.gui.gui_macros")
 
 
 def test_select_board_cards_real():
@@ -28,7 +29,7 @@ def test_select_board_cards_real():
         time.sleep(0.3)
 
     GUI.click_action0();  time.sleep(0.4)  # Cancel selection
-    GUI.click_end_turn(); time.sleep(0.6)  # End P1 turn
+    MACROS.end_turn(); time.sleep(0.6)  # End P1 turn
 
     # ---- Player 2 board --------------------------------------------------
     for slot in range(5):                  # slots 0-4 = right→left
@@ -36,4 +37,4 @@ def test_select_board_cards_real():
         time.sleep(0.3)
 
     GUI.click_action0();  time.sleep(0.4)  # Cancel selection
-    GUI.click_end_turn(); time.sleep(0.6)  # End P2 turn
+    MACROS.end_turn(); time.sleep(0.6)  # End P2 turn
