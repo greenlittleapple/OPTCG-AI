@@ -18,6 +18,7 @@ from utils.vision import finder
 @dataclass
 class OPTCGPlayerObs:
     """Observation data returned to the learning agent."""
+
     choice_cards: List[str]
     hand: List[str]
     board: List[str]
@@ -32,6 +33,7 @@ class OPTCGPlayerObs:
     num_life_opponent: int
     attack_power: int
     attack_power_opponent: int
+    is_countering: bool
 
     def values(self):
         return {
@@ -49,6 +51,7 @@ class OPTCGPlayerObs:
             "num_life_opponent": int(self.num_life_opponent),
             "attack_power": int(self.attack_power),
             "attack_power_opponent": int(self.attack_power_opponent),
+            "is_countering": int(self.is_countering),
         }
 
 
@@ -101,9 +104,7 @@ class OPTCGEnvBase(AECEnv):
                     high=16,
                     dtype=np.int64,
                 )
-        space_mapping["action_mask"] = spaces.MultiBinary(
-            OPTCGEnvBase.TOTAL_ACTIONS
-        )
+        space_mapping["action_mask"] = spaces.MultiBinary(OPTCGEnvBase.TOTAL_ACTIONS)
         return spaces.Dict(space_mapping)
 
     @staticmethod
@@ -186,6 +187,7 @@ class OPTCGEnvBase(AECEnv):
             num_life_opponent=obs.num_life_p2 if agent_is_p1 else obs.num_life_p1,
             attack_power=attack_power,
             attack_power_opponent=attack_power_opponent,
+            is_countering=obs.is_countering,
         ).values()
         obs_dict["action_mask"] = self.create_action_mask(obs_dict)
         return obs_dict
@@ -216,11 +218,17 @@ class OPTCGEnvBase(AECEnv):
         num_don = int(obs.get("num_active_don", 0))
         leader_rested = bool(obs.get("leader_rested", 0))
 
-        attach_mask = [1 if i <= num_don else 0 for i in range(1, self.MAX_ATTACH_DON + 1)]
+        attach_mask = [
+            1 if i <= num_don else 0 for i in range(1, self.MAX_ATTACH_DON + 1)
+        ]
 
         if not leader_rested:
-            rested = list(obs.get("rested_cards_opponent", [0] * self.MAX_ATTACK_TARGET))
-            attack_target_mask = [1] + [int(v) for v in rested[: self.MAX_ATTACK_TARGET]]
+            rested = list(
+                obs.get("rested_cards_opponent", [0] * self.MAX_ATTACK_TARGET)
+            )
+            attack_target_mask = [1] + [
+                int(v) for v in rested[: self.MAX_ATTACK_TARGET]
+            ]
         else:
             attack_target_mask = [0] * (self.MAX_ATTACK_TARGET + 1)
 
@@ -294,8 +302,8 @@ class OPTCGEnv(OPTCGEnvBase, gym.Env):
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         super().reset(seed=seed, options=options)
-        self.observation_space = super().observation_space(self.possible_agents[0]) # type: ignore
-        self.action_space = super().action_space(self.possible_agents[0]) # type: ignore
+        self.observation_space = super().observation_space(self.possible_agents[0])  # type: ignore
+        self.action_space = super().action_space(self.possible_agents[0])  # type: ignore
         return self.observe(self.agent_selection), {}
 
     def step(self, action: int):
