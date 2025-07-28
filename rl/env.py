@@ -20,10 +20,11 @@ from utils.vision import finder
 class OPTCGPlayerObs:
     """Observation data returned to the learning agent."""
 
-    choice_cards: List[str]
-    hand: List[str]
-    board: List[str]
-    board_opponent: List[str]
+    choice_cards: List[int]
+    hand: List[int]
+    hand_size_opponent: int
+    board: List[int]
+    board_opponent: List[int]
     rested_cards: List[int]
     rested_cards_opponent: List[int]
     leader_rested: bool
@@ -41,6 +42,7 @@ class OPTCGPlayerObs:
         return {
             "choice_cards": np.array(self.choice_cards),
             "hand": np.array(self.hand),
+            "hand_size_opponent": int(self.hand_size_opponent),
             "board": np.array(self.board),
             "board_opponent": np.array(self.board_opponent),
             "rested_cards": np.array(self.rested_cards),
@@ -148,7 +150,7 @@ class OPTCGEnvBase(AECEnv):
         self.observation_spaces = {agent: obs_space for agent in self.possible_agents}
 
     def observe(self, agent: str) -> Any:
-        def process_card_names(cards: List[str]) -> list:
+        def process_card_names(cards: List[str]) -> list[int]:
             card_ids = []
             for card in cards:
                 card_id = constants.CARD_IDS.get(card, 0)
@@ -162,11 +164,11 @@ class OPTCGEnvBase(AECEnv):
             obs = self._vision.scan()
             self.fake_obs = copy(obs)
 
-        obs.hand_p1 = process_card_names(obs.hand_p1)
-        obs.hand_p2 = process_card_names(obs.hand_p2)
-        obs.board_p1 = process_card_names(obs.board_p1)
-        obs.board_p2 = process_card_names(obs.board_p2)
-        obs.choice_cards = process_card_names(obs.choice_cards)
+        hand_p1 = process_card_names(obs.hand_p1)
+        hand_p2 = process_card_names(obs.hand_p2)
+        board_p1 = process_card_names(obs.board_p1)
+        board_p2 = process_card_names(obs.board_p2)
+        choice_cards = process_card_names(obs.choice_cards)
 
         agent_is_p1 = agent == "player_0"
 
@@ -182,10 +184,11 @@ class OPTCGEnvBase(AECEnv):
         attack_power_opponent = scale_power(raw_power_opp)
 
         obs_dict = OPTCGPlayerObs(
-            choice_cards=obs.choice_cards,
-            hand=obs.hand_p1 if agent_is_p1 else obs.hand_p2,
-            board=obs.board_p1 if agent_is_p1 else obs.board_p2,
-            board_opponent=obs.board_p2 if agent_is_p1 else obs.board_p1,
+            choice_cards=choice_cards,
+            hand=hand_p1 if agent_is_p1 else hand_p2,
+            hand_size_opponent=np.count_nonzero(hand_p2) if agent_is_p1 else np.count_nonzero(hand_p1),
+            board=board_p1 if agent_is_p1 else board_p2,
+            board_opponent=board_p2 if agent_is_p1 else board_p1,
             rested_cards=obs.rested_cards_p1 if agent_is_p1 else obs.rested_cards_p2,
             rested_cards_opponent=(
                 obs.rested_cards_p2 if agent_is_p1 else obs.rested_cards_p1
