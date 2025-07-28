@@ -131,12 +131,13 @@ def attack(
     )
 
 
-def deploy_card(
+def select_card(
     acting_player: int,
     hand_card_index: int,
     hand_size: int,
+    deploy_card: bool = False,
 ) -> None:
-    """Deploy a card from the acting player's hand and confirm.
+    """Select a card from the acting player's hand and optionally deploy.
 
     Parameters
     ----------
@@ -146,6 +147,8 @@ def deploy_card(
         Index of the card to deploy (0 = left‑most).
     hand_size : int
         Total number of cards currently in that hand.
+    deploy_card : bool
+        Deploy card (will check if Deploy button exists)
     """
     # --- Validate ----------------------------------------------------
     if acting_player not in (1, 2):
@@ -158,8 +161,8 @@ def deploy_card(
     # --- Select card from hand --------------------------------------
     _click_hand_card(acting_player, hand_card_index, hand_size)
 
-    # --- Confirm with Action 1 --------------------------------------
-    GUI.click_action1()
+    if deploy_card:
+        click_action_when_visible(1, constants.DEPLOY_BTN)
 
 
 def end_turn() -> None:
