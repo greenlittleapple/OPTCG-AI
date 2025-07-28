@@ -142,6 +142,7 @@ class OPTCGObs:
     num_life_p2: int
     attack_powers: List[int]
     is_countering: bool
+    is_game_over: bool
 
 
 class OPTCGVision:
@@ -285,6 +286,7 @@ class OPTCGVision:
         button_area = frame[btn_y0:btn_y1, btn_x0:btn_x1]
         buttons = {name: self.find(name, frame=button_area) for name in UNSCALED}
         is_countering = bool(buttons.get(constants.RESOLVE_ATTACK_BTN))
+        is_game_over = bool(buttons.get(constants.REMATCH_BTN))
 
         # 2. Constants -------------------------------------------------------
         SLOT_WIDTH_PCT = 0.03
@@ -492,6 +494,7 @@ class OPTCGVision:
             num_life_p2=num_life_p2,
             attack_powers=attack_powers,
             is_countering=is_countering,
+            is_game_over=is_game_over,
         )
 
         return obs

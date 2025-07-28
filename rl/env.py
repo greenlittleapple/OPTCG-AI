@@ -35,6 +35,7 @@ class OPTCGPlayerObs:
     attack_power: int
     attack_power_opponent: int
     is_countering: bool
+    is_game_over: bool
 
     def values(self):
         return {
@@ -53,6 +54,7 @@ class OPTCGPlayerObs:
             "attack_power": int(self.attack_power),
             "attack_power_opponent": int(self.attack_power_opponent),
             "is_countering": int(self.is_countering),
+            "is_game_over": int(self.is_game_over),
         }
 
 
@@ -205,6 +207,7 @@ class OPTCGEnvBase(AECEnv):
             attack_power=attack_power,
             attack_power_opponent=attack_power_opponent,
             is_countering=obs.is_countering,
+            is_game_over=obs.is_game_over,
         ).values()
         obs_dict["action_mask"] = self.create_action_mask(obs_dict)
         return obs_dict

@@ -11,6 +11,7 @@ SELECT_TARGET_BTN = "select_target"
 DEPLOY_BTN = "deploy"
 DONT_DRAW_ANY_BTN = "dont_draw_any"
 END_TURN_BTN = "end_turn"
+REMATCH_BTN = "rematch"
 RESOLVE_ATTACK_BTN = "resolve_attack"
 RETURN_CARDS_TO_DECK_BTN = "return_cards_to_deck"
 
