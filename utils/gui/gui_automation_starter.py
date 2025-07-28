@@ -104,14 +104,6 @@ def click_action0() -> None:
     """Click Action 0 (contextual button at 80% from left, 90% down)."""
     click_relative_to_window(0.8, 0.9)
 
-
-def click_end_turn() -> None:
-    """Click End Turn with confirmation by clicking Action 0 twice."""
-    click_action0()
-    time.sleep(CLICK_DELAY)
-    click_action0()
-
-
 def click_p1_leader() -> None:
     """Click Player 1 leader (55% from left, 75% down)."""
     click_relative_to_window(0.55, 0.75)

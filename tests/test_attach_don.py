@@ -32,7 +32,7 @@ def test_attach_don_real():
         num_to_attach=10
     )
     time.sleep(0.6)
-    GUI.click_end_turn(); time.sleep(0.8)
+    MACROS.end_turn(); time.sleep(0.8)
 
     MACROS.attach_don(
         acting_player=2,
@@ -42,7 +42,7 @@ def test_attach_don_real():
         num_to_attach=10
     )
     time.sleep(0.6)
-    GUI.click_end_turn(); time.sleep(0.8)
+    MACROS.end_turn(); time.sleep(0.8)
 
     # ---- Phase 2: partial DON attachment to leaders ----------------------
     # P1: 7 total DON, 3 attachable, attach only 2 to the Leader
@@ -54,7 +54,7 @@ def test_attach_don_real():
         num_to_attach=2
     )
     time.sleep(0.6)
-    GUI.click_end_turn(); time.sleep(0.8)
+    MACROS.end_turn(); time.sleep(0.8)
 
     # P2: 5 total DON, 5 attachable, attach 3 to the Leader
     MACROS.attach_don(
@@ -65,6 +65,6 @@ def test_attach_don_real():
         num_to_attach=3
     )
     time.sleep(0.6)
-    GUI.click_end_turn(); time.sleep(0.8)
+    MACROS.end_turn(); time.sleep(0.8)
 
     # Test passes if no exception is raised.

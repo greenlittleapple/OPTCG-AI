@@ -21,8 +21,46 @@ All text is ASCII‑only; no smart quotes.
 from __future__ import annotations
 
 from typing import List, Tuple
+import time
 
 from utils.gui import gui_automation_starter as GUI
+from utils.vision import finder
+
+VISION = finder.loader
+
+# ---------------------------------------------------------------------
+# Button name constants ------------------------------------------------
+# ---------------------------------------------------------------------
+
+ATTACK_BTN = "attack"
+NO_BLOCKER_BTN = "no_blocker"
+CHOOSE_ZERO_TARGETS_BTN = "choose_0_targets"
+CHOOSE_NEG1_TARGETS_BTN = "choose_-1_targets"
+CHOOSE_FRIENDLY_TARGETS_BTN = "choose_0_friendly_targets"
+SELECT_CHARACTER_TO_REPLACE_BTN = "select_character_to_replace"
+SELECT_TARGET_BTN = "select_target"
+DEPLOY_BTN = "deploy"
+DONT_DRAW_ANY_BTN = "dont_draw_any"
+END_TURN_BTN = "end_turn"
+RESOLVE_ATTACK_BTN = "resolve_attack"
+RETURN_CARDS_TO_DECK_BTN = "return_cards_to_deck"
+
+def _wait_for_button(name: str, timeout: float = 1.0, interval: float = 0.1) -> bool:
+    """Return True if *name* button appears within *timeout* seconds."""
+    end = time.time() + timeout
+    while time.time() < end:
+        if VISION.find(name):
+            return True
+        time.sleep(interval)
+    return False
+
+
+def click_action_when_visible(action_number: int, name: str) -> bool:
+    """Return ``True`` and click if *name* button appears."""
+    if _wait_for_button(name):
+        _click_action_button(action_number)
+        return True
+    return False
 
 # ---------------------------------------------------------------------
 # Generic helper -------------------------------------------------------
@@ -33,6 +71,7 @@ def perform_action(
     acting_card_index: int,
     action_number: int,
     targets: List[Tuple[int, int]] | None = None,
+    require_button: str | None = None,
 ) -> None:
     """Execute an in‑game action.
 
@@ -47,6 +86,8 @@ def perform_action(
     targets : list[tuple[int, int]] | None
         Each tuple is (player, card_index). Provide None (or empty list) for
         no‑target actions.
+    require_button : str | None
+        If provided, wait for this GUI button before clicking the action.
     """
     # --- Validate ----------------------------------------------------
     if acting_player not in (1, 2):
@@ -66,8 +107,12 @@ def perform_action(
     # --- Select acting card -----------------------------------------
     _click_board_card(acting_player, acting_card_index)
 
-    # --- Click action button ----------------------------------------
-    _click_action_button(action_number)
+    # --- Click action button (optionally waiting for cue) -----------
+    if require_button is not None:
+        if not click_action_when_visible(action_number, require_button):
+            raise RuntimeError(f"{require_button} button not available")
+    else:
+        _click_action_button(action_number)
 
     # --- Click each target -----------------------------------------
     for t_player, t_idx in targets:
@@ -85,6 +130,9 @@ def attack(
 ) -> None:
     """Attack macro (Action 1).
 
+    The function waits for the Attack button to appear after selecting the
+    acting card, raising ``RuntimeError`` if it doesn't become visible.
+
     Examples
     --------
     >>> attack(1, 0, 2, 0)  # P1 leader attacks P2 leader
@@ -95,6 +143,7 @@ def attack(
         acting_card_index=acting_card_index,
         action_number=1,
         targets=[(target_player, target_card_index)],
+        require_button=ATTACK_BTN,
     )
 
 
@@ -127,6 +176,13 @@ def deploy_card(
 
     # --- Confirm with Action 1 --------------------------------------
     GUI.click_action1()
+
+
+def end_turn() -> None:
+    """End the current turn by double-clicking Action 0."""
+    if click_action_when_visible(0, END_TURN_BTN):
+        time.sleep(0.1)
+        GUI.click_action0()
 
 
 def attach_don(
