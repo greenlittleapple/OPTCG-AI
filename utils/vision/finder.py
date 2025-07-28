@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+from utils import constants
 
 from utils.vision.capture import OPTCGVisionHelper
 
@@ -125,6 +126,7 @@ Match = Tuple[Tuple[int, int], Tuple[int, int], float]  # (top-left), (w,h), sco
 @dataclass
 class OPTCGObs:
     """Raw board state information gathered from the screen."""
+
     choice_cards: List[str]
     hand_p1: List[str]
     hand_p2: List[str]
@@ -139,6 +141,7 @@ class OPTCGObs:
     num_life_p1: int
     num_life_p2: int
     attack_powers: List[int]
+    is_countering: bool
 
 
 class OPTCGVision:
@@ -281,6 +284,7 @@ class OPTCGVision:
         btn_x0, btn_x1 = int(0.70 * w), w
         button_area = frame[btn_y0:btn_y1, btn_x0:btn_x1]
         buttons = {name: self.find(name, frame=button_area) for name in UNSCALED}
+        is_countering = bool(buttons.get(constants.RESOLVE_ATTACK_BTN))
 
         # 2. Constants -------------------------------------------------------
         SLOT_WIDTH_PCT = 0.03
@@ -365,7 +369,7 @@ class OPTCGVision:
                 roi = frame[y0:y1, x0:x1]
                 cards.append(self._detect_card_in_roi(roi, hand=True))
             assert len(cards) <= HAND_MAX_SIZE
-            cards += [''] * (HAND_MAX_SIZE - len(cards))
+            cards += [""] * (HAND_MAX_SIZE - len(cards))
             return cards
 
         def scan_board(
@@ -459,11 +463,13 @@ class OPTCGVision:
 
         # 6. Attack power numbers -----------------------------------------
         attack_powers: List[int] = [-1, -1]
-        if buttons.get("resolve_attack"):
+        if is_countering:
             text = OPTCGVisionHelper.detect_number(frame)
             if text:
                 try:
-                    nums = [int(t) for t in text.replace(',', ' ').split() if '+' not in t]
+                    nums = [
+                        int(t) for t in text.replace(",", " ").split() if "+" not in t
+                    ]
                     if len(nums) >= 2:
                         attack_powers = nums[:2]
                 except ValueError:
@@ -485,6 +491,7 @@ class OPTCGVision:
             num_life_p1=num_life_p1,
             num_life_p2=num_life_p2,
             attack_powers=attack_powers,
+            is_countering=is_countering,
         )
 
         return obs
