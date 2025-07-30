@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import copy
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
+import time
 from typing import Any, List
 
 import numpy as np
@@ -14,6 +15,24 @@ import gymnasium as gym
 from utils import constants
 from utils.gui import gui_macros
 from utils.vision import finder
+import functools
+
+def timeit(func):
+    """Decorator that prints execution time of the function."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        args_repr = [repr(a) for a in args]
+        kwargs_repr = [f"{k}={repr(v)}" for k, v in kwargs.items()]
+        signature = ", ".join(args_repr + kwargs_repr)
+
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        end = time.perf_counter()
+        elapsed = end - start
+
+        print(f"Function {func.__name__}({signature}) took {elapsed:.4f} seconds")
+        return result
+    return wrapper
 
 
 @dataclass
@@ -38,7 +57,7 @@ class OPTCGPlayerObs:
     is_countering: bool
     is_game_over: bool
 
-    def values(self):
+    def to_dict(self):
         return {
             "choice_cards": np.array(self.choice_cards),
             "hand": np.array(self.hand),
@@ -68,13 +87,13 @@ class OPTCGEnvBase(AECEnv):
         "is_parallelizable": True,
     }
     render_mode = None
-    fake_obs = None
-    FAST_MODE = True
-    VERBOSE = True
+    last_obs = None
+    FAST_MODE = False
+    VERBOSE = False
     P1 = "player_0"
     P2 = "player_1"
 
-    game_state = {"total_don_p1": 3, "total_don_p2": 4}
+    turn_state = {"total_don_p1": 3, "total_don_p2": 4, "has_attached_don": False}
 
     class INTENTS(Enum):
         END_TURN = "end_turn"
@@ -137,7 +156,10 @@ class OPTCGEnvBase(AECEnv):
     def _build_action_space() -> spaces.Discrete:
         return spaces.Discrete(OPTCGEnvBase.TOTAL_ACTIONS)
 
-    def __init__(self, max_steps: int = 100, step_delay: float = 0.5) -> None:
+    def _get_hand_size(self, obs: dict) -> int:
+        return np.count_nonzero(obs["hand"])
+
+    def __init__(self, max_steps: int = 200, step_delay: float = 0.5) -> None:
         super().__init__()
         # Instantiate the vision helper used for observation gathering
         self._vision = finder.OPTCGVision()
@@ -154,7 +176,7 @@ class OPTCGEnvBase(AECEnv):
         obs_space = self._build_obs_space()
         self.observation_spaces = {agent: obs_space for agent in self.possible_agents}
 
-    def observe(self, agent: str) -> Any:
+    def observe(self, agent: str, new_obs = True) -> Any:
         def process_card_names(cards: List[str]) -> list[int]:
             card_ids = []
             for card in cards:
@@ -162,11 +184,11 @@ class OPTCGEnvBase(AECEnv):
                 card_ids.append(card_id)
             return card_ids
 
-        if self.FAST_MODE and self.fake_obs:
-            obs = copy(self.fake_obs)
+        if (not new_obs) and self.last_obs:
+            obs = copy(self.last_obs)
         else:
             obs = self._vision.scan()
-            self.fake_obs = copy(obs)
+            self.last_obs = copy(obs)
 
         hand_p1 = process_card_names(obs.hand_p1)
         hand_p2 = process_card_names(obs.hand_p2)
@@ -217,7 +239,7 @@ class OPTCGEnvBase(AECEnv):
             attack_power_opponent=attack_power_opponent,
             is_countering=obs.is_countering,
             is_game_over=obs.is_game_over,
-        ).values()
+        ).to_dict()
         obs_dict["action_mask"] = self.create_action_mask(obs_dict)
         return obs_dict
 
@@ -235,7 +257,9 @@ class OPTCGEnvBase(AECEnv):
         self.infos = {agent: {} for agent in self.agents}
         self._steps = 0
         self.agent_selection = self.agents[0]
-        self._last_obs = {agent: self.observe("player_0") for agent in self.agents}
+        gui_macros.reset_game()
+        self._last_obs = {self.P1: self.observe(self.P1), self.P2: self.observe(self.P2, new_obs=False)}
+        self.turn_state = {"total_don_p1": self._last_obs[self.P1]['num_active_don'], "total_don_p2": self._last_obs[self.P2]['num_active_don'], "has_attached_don": False}
 
     def switch_player(self) -> None:
         """Toggle :attr:`agent_selection` between ``player_0`` and ``player_1``."""
@@ -247,14 +271,16 @@ class OPTCGEnvBase(AECEnv):
         is_countering = obs["is_countering"]
         num_don = int(obs.get("num_active_don", 0))
         leader_rested = bool(obs.get("leader_rested", 0))
-        is_max_hand_size = np.count_nonzero(obs["hand"]) >= 9
+        is_max_hand_size = self._get_hand_size(obs) >= 9
 
         # Handle End Turn logic
         end_turn_mask = [not is_countering and leader_rested and not is_max_hand_size]
 
         # Handle DON! Attach logic
         attach_mask = (
-            [0] * 10 if is_countering or is_max_hand_size else [1] * num_don + [0] * (10 - num_don)
+            [0] * 10
+            if is_countering or is_max_hand_size or leader_rested or self.turn_state["has_attached_don"]
+            else [1] * num_don + [0] * (10 - num_don)
         )
 
         # Handle Deploy logic
@@ -265,7 +291,7 @@ class OPTCGEnvBase(AECEnv):
         )
 
         # Handle Attack logic
-        if not (leader_rested or is_max_hand_size):
+        if not (leader_rested or is_max_hand_size or is_countering):
             rested = list(obs["rested_cards_opponent"])
             attack_target_mask = [1] + rested
         else:
@@ -283,18 +309,28 @@ class OPTCGEnvBase(AECEnv):
         mask.extend(resolve_mask)
         return np.array(mask, dtype=np.int8)
 
+    def end_game(self):
+        self.terminations["player_0"] = True
+        self.terminations["player_1"] = True
+
     def step(self, action: int) -> None:
         """Execute *action* and update environment state."""
+        is_player1 = self.agent_selection == self.agents[0]
+        player_index = 0 if is_player1 else 1
+        last_obs = self._last_obs[self.agent_selection]
+
+        if last_obs["is_game_over"]:
+            self.end_game()
+
         if (
             self.terminations[self.agent_selection]
             or self.truncations[self.agent_selection]
         ):
-            self._was_dead_step(action)
             return
 
         self._clear_rewards()
-        reward = 0.0
 
+        # Action for the turn
         intent = None
         target = int(action)  # for easier math
         for temp_intent in self.INTENTS_ORDER:
@@ -302,33 +338,83 @@ class OPTCGEnvBase(AECEnv):
                 intent = temp_intent
                 break
             target -= self.INTENTS_MAX[temp_intent]
-
         match intent:
             case self.INTENTS.END_TURN:
-                assert gui_macros.click_action_when_visible(0, constants.END_TURN_BTN)
+                gui_macros.end_turn()
             case self.INTENTS.ATTACH_DON:
-                gui_macros.attach_don(int(self.agent_selection == self.agents[0]), 0, target, self._last_obs[self.agent_selection])
+                gui_macros.attach_don(
+                    player_index,
+                    0,
+                    last_obs["num_active_don"],
+                    self.turn_state["total_don_p1" if is_player1 else "total_don_p2"],
+                    target + 1,
+                )
             case self.INTENTS.DEPLOY:
-                pass
+                gui_macros.select_card(
+                    player_index,
+                    target,
+                    self._get_hand_size(last_obs),
+                    deploy_card=True,
+                )
+                if gui_macros._wait_for_button(constants.SELECT_CHARACTER_TO_REPLACE_BTN):
+                    gui_macros._click_board_card(player_index, 1)
+                while not gui_macros._wait_for_button(constants.END_TURN_BTN):
+                    gui_macros.GUI.click_action0()
+                    time.sleep(0.1)
             case self.INTENTS.ATTACK:
-                pass
+                gui_macros.attack(
+                    player_index,
+                    0,
+                    int(not player_index),
+                    0,
+                )
             case self.INTENTS.COUNTER:
-                pass
+                gui_macros.select_card(
+                    player_index,
+                    target,
+                    self._get_hand_size(last_obs),
+                )
             case self.INTENTS.RESOLVE:
-                pass
+                assert gui_macros.click_action_when_visible(
+                    0,
+                    constants.RESOLVE_ATTACK_BTN,
+                )
             case _:
                 raise ValueError("Invalid intent!")
+            
+        # delay to let action happen
+        # time.sleep(1)
 
-        self.rewards[self.agent_selection] = reward
+        # Observe result
         self._last_obs["player_0"] = self.observe("player_0")
-        self._last_obs["player_1"] = self.observe("player_1")
+        self._last_obs["player_1"] = self.observe("player_1", new_obs=False)
+
+        # Post-action processing
+        match intent:
+            case self.INTENTS.END_TURN:
+                self.turn_state["total_don_p1"] = self._last_obs["player_0"][
+                    "num_active_don"
+                ]
+                self.turn_state["total_don_p2"] = self._last_obs["player_1"][
+                    "num_active_don"
+                ]
+                self.turn_state["has_attached_don"] = False
+                self.switch_player()
+            case self.INTENTS.ATTACH_DON:
+                self.turn_state["total_don_p1" if is_player1 else "total_don_p2"] -= (target + 1)
+                self.turn_state["has_attached_don"] = True
+            case self.INTENTS.ATTACK:
+                self.switch_player()
+            case self.INTENTS.RESOLVE:
+                if self._last_obs[self.agent_selection]['is_game_over']:
+                    self.rewards[self.agents[player_index]] = -1
+                    self.rewards[self.agents[int(not player_index)]] = 1
+                    print(f"--- PLAYER {int(not player_index) + 1} WINS")
+                self.switch_player()
 
         self._steps += 1
-        if self._steps % 10 == 0:
-            self.switch_player()
         if self._steps >= self._max_steps:
-            self.terminations["player_0"] = True
-            self.terminations["player_1"] = True
+            self.end_game()
 
         if self.VERBOSE:
             print(f"--- ACTION: {action}")
@@ -370,17 +456,17 @@ class OPTCGEnv(OPTCGEnvBase, gym.Env):
             self.infos[current_agent],
         )
 
-    def observe(self, agent: str):
-        obs = super().observe(agent)
+    def observe(self, agent: str, new_obs = True):
+        obs = super().observe(agent, new_obs)
         if isinstance(obs, OPTCGPlayerObs):
             return asdict(obs)
         return obs
 
     def action_mask(self):
-        return super().create_action_mask(self._last_obs[self.agent_selection])
+        return super().observe(self.agent_selection)["action_mask"]
 
 
-def main(num_steps: int = 10) -> None:
+def main(num_steps: int = 30) -> None:
     """Run a short random rollout for quick manual testing."""
     env = OPTCGEnv(max_steps=num_steps)
     env.reset()
@@ -388,32 +474,14 @@ def main(num_steps: int = 10) -> None:
     obs = env.observe(env.P1)
     print("reset ->", obs)
 
-    # Player 1 takes five actions
-    for i in range(5):
+    for i in range(num_steps):
+        print(f'--- LAST OBS: {env.last()}')
         action = env.action_spaces[env.agent_selection].sample(env.action_mask())
         obs, reward, terminated, truncated, _ = env.step(action)
-        print(f"p1 step {i}: a={action} r={reward} term={terminated} trunc={truncated}")
+        print(f"--- STEP: player={env.agent_selection} step={i}: a={action} r={reward} term={terminated} trunc={truncated}")
         if terminated or truncated:
             print("final obs ->", obs)
             return
-
-    # Switch to Player 2
-    env.switch_player()
-    for i in range(4):
-        action = env.action_spaces[env.agent_selection].sample(env.action_mask())
-        obs, reward, terminated, truncated, _ = env.step(action)
-        print(f"p2 step {i}: a={action} r={reward} term={terminated} trunc={truncated}")
-        if terminated or truncated:
-            print("final obs ->", obs)
-            return
-
-    # Switch back to Player 1 for a final action
-    env.switch_player()
-    action = env.action_spaces[env.agent_selection].sample(env.action_mask())
-    obs, reward, terminated, truncated, _ = env.step(action)
-    print(f"p1 step 5: a={action} r={reward} term={terminated} trunc={truncated}")
-    print("final obs ->", obs)
-
 
 if __name__ == "__main__":
     main()

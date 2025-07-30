@@ -212,8 +212,8 @@ class OPTCGVisionHelper:
         # --- 1. HSV mask ------------------------------------------------------
         # TODO: Add separate check for green card buff numbers
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower = np.array([147, 150, 150], dtype=np.uint8)  # H-S-V lower
-        upper = np.array([163, 255, 255], dtype=np.uint8)  # H-S-V upper
+        lower = np.array([159, 200, 150], dtype=np.uint8)  # H-S-V lower
+        upper = np.array([162, 255, 255], dtype=np.uint8)  # H-S-V upper
         mask = cv2.inRange(hsv, lower, upper)
         debug_imgs.append(("1 – raw HSV mask", cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)))
 

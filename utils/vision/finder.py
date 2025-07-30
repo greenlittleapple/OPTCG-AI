@@ -248,7 +248,7 @@ class OPTCGVision:
     ) -> str:
         """Return the first card template that matches in `roi`, else None."""
         for name in CARDS:  # simple linear scan
-            if hand and name in UNCROPPED_CARDS:
+            if name in UNCROPPED_CARDS:
                 continue
             if self.find(name, frame=roi, is_card=True, rotated=rotated, hand=hand):
                 return name
@@ -362,8 +362,6 @@ class OPTCGVision:
 
         def scan_hand(y0: int, y1: int, hand_size: int) -> List[str]:
             cards: List[str] = []
-            if hand_size == 0:
-                return cards
             shift_pct = HAND_TOTAL_WIDTH_PCT / max(hand_size - 1, 4)
             for i in range(hand_size):
                 x0 = int((HAND_SLOT_START_PCT + shift_pct * i) * w)
@@ -427,7 +425,8 @@ class OPTCGVision:
         p1_y0, p1_y1 = int(0.80 * h), h
         p1_count = count_hand_cards(p1_y0, p1_y1)
         hand_p1 = scan_hand(p1_y0, p1_y1, p1_count)
-        board_p1, rested_p1 = scan_board(BOARD_P1_START_X, BOARD_STEP_PCT, BOARD_P1_Y)
+        # board_p1, rested_p1 = scan_board(BOARD_P1_START_X, BOARD_STEP_PCT, BOARD_P1_Y)
+        board_p1, rested_p1 = [''] * 5, [0] * 5
         num_life_p1 = count_life_cards(
             LIFE_P1_X0_PCT,
             LIFE_P1_Y0_PCT,
@@ -440,7 +439,8 @@ class OPTCGVision:
         p2_y0, p2_y1 = 0, int(0.20 * h)
         p2_count = count_hand_cards(p2_y0, p2_y1)
         hand_p2 = scan_hand(p2_y0, p2_y1, p2_count)
-        board_p2, rested_p2 = scan_board(BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y)
+        # board_p2, rested_p2 = scan_board(BOARD_P2_START_X, -BOARD_STEP_PCT, BOARD_P2_Y)
+        board_p2, rested_p2 = [''] * 5, [0] * 5
         num_life_p2 = count_life_cards(
             LIFE_P2_X0_PCT,
             LIFE_P2_Y0_PCT,
@@ -461,7 +461,8 @@ class OPTCGVision:
 
         # 5. Choice row ------------------------------------------------------
         choice_y0, choice_y1 = int(0.65 * h), int(0.85 * h)
-        choice_cards = scan_choices(choice_y0, choice_y1)
+        # choice_cards = scan_choices(choice_y0, choice_y1)
+        choice_cards = [''] * 5
 
         # 6. Attack power numbers -----------------------------------------
         attack_powers: List[int] = [-1, -1]

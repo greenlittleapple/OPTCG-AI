@@ -47,7 +47,7 @@ import pygetwindow as gw  # type: ignore
 # ---------------------------------------------------------------------------
 
 WINDOW_TITLE = "OPTCGSim"  # Substring that identifies the game window
-CLICK_DELAY = 0.2           # Seconds to wait after each click
+CLICK_DELAY = 0.1           # Seconds to wait after each click
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -86,6 +86,9 @@ def click_relative_to_window(rel_x: float, rel_y: float, delay: float = CLICK_DE
 # ---------------------------------------------------------------------------
 # High‑level button helpers
 # ---------------------------------------------------------------------------
+
+def reset_mouse_to_middle() -> None:
+    click_relative_to_window(0.5, 0.5)
 
 # Menu buttons
 

@@ -98,9 +98,12 @@ def perform_action(
     else:
         _click_action_button(action_number)
 
+    time.sleep(0.1)
     # --- Click each target -----------------------------------------
     for t_player, t_idx in targets:
         _click_board_card(t_player, t_idx)
+
+    GUI.reset_mouse_to_middle()
 
 # ---------------------------------------------------------------------
 # Convenience wrappers -------------------------------------------------
@@ -163,22 +166,23 @@ def select_card(
 
     if deploy_card:
         click_action_when_visible(1, constants.DEPLOY_BTN)
+    GUI.reset_mouse_to_middle()
 
 
 def end_turn() -> None:
     """End the current turn by double-clicking Action 0."""
-    if click_action_when_visible(0, constants.END_TURN_BTN):
-        time.sleep(0.1)
-        GUI.click_action0()
+    assert click_action_when_visible(0, constants.END_TURN_BTN)
+    GUI.click_action0()
 
 def reset_game() -> None:
     """Restart game after Rematch button shows up (aka Game Over)"""
-    assert click_action_when_visible(0, constants.REMATCH_BTN)
-    GUI.click_start()
-    GUI.click_action0() # Keep P1 hand
-    GUI.click_action0() # Keep P2 hand
-    end_turn() # Skip P1 first turn
-    end_turn() # Skip P2 first turn
+    if click_action_when_visible(0, constants.REMATCH_BTN):
+        GUI.click_start()
+        GUI.click_action0() # Keep P1 hand
+        GUI.click_action0() # Keep P2 hand
+        end_turn() # Skip P1 first turn
+        end_turn() # Skip P2 first turn
+        time.sleep(1)
 
 
 def attach_don(
@@ -261,6 +265,7 @@ def _click_board_card(player: int, idx: int) -> None:
 
 
 def _click_hand_card(player: int, idx: int, hand_size: int) -> None:
+    hand_size = max(5, hand_size)
     if player == 0:
         GUI.click_p1_hand(card_index=idx, hand_size=hand_size)
     else:
